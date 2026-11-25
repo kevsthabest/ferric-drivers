@@ -1,0 +1,109 @@
+# DynaBook SS 2000M -- Gate 4b.1/4b.3 CardBus Capture (2026-11-21)
+
+> Redacted for publication: the card MAC address in the WPROBE section
+> was replaced with a placeholder. Everything else is the original
+> capture.
+
+## 1. Pre-CBINIT (CBPROBE.TXT -- BIOS boot state)
+Ferric DOS CardBus bridge probe
+CBPROBE: fn=0 present=1 id=1179:0617 rev=32 class=060700 hdr=82 cmd=0007 stat=0490 bar0=00000000 bus=80/00/80 intline=FF intpin=01 ppbcn=0000 wben=0 scr=00000000 slotctl=D0 intctl=10 cardet=86 pc32=1 vs=1/1 swdet=0 rcr=0C000000
+CBPROBE: cfg fn=0 off=00: 79 11 17 06 07 00 90 04 32 00 07 06 00 40 82 00
+CBPROBE: cfg fn=0 off=10: 00 00 00 00 80 00 80 04 00 03 03 00 00 00 00 00
+CBPROBE: cfg fn=0 off=20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=30: 00 00 00 00 00 00 00 00 00 00 00 00 FF 01 00 00
+CBPROBE: cfg fn=0 off=40: 79 11 01 00 E1 03 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=80: 01 00 01 00 00 00 80 00 00 00 00 00 00 00 00 01
+CBPROBE: cfg fn=0 off=90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=A0: D0 10 00 86 00 00 00 0C 00 80 00 00 00 D1 00 00
+CBPROBE: cfg fn=0 off=B0: CF 3F 3F 3F 20 10 08 0A 00 01 01 10 00 3F 02 00
+CBPROBE: cfg fn=0 off=C0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=D0: 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=E0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=F0: 00 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00
+CBPROBE: fn=1 present=1 id=1179:0617 rev=32 class=060700 hdr=82 cmd=0007 stat=0490 bar0=00000000 bus=80/00/80 intline=FF intpin=02 ppbcn=0000 wben=0 scr=00000000 slotctl=D0 intctl=20 cardet=86 pc32=1 vs=1/1 swdet=0 rcr=0C000000
+CBPROBE: cfg fn=1 off=00: 79 11 17 06 07 00 90 04 32 00 07 06 00 40 82 00
+CBPROBE: cfg fn=1 off=10: 00 00 00 00 80 00 80 04 00 04 04 00 00 00 00 00
+CBPROBE: cfg fn=1 off=20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=30: 00 00 00 00 00 00 00 00 00 00 00 00 FF 02 00 00
+CBPROBE: cfg fn=1 off=40: 79 11 01 00 E1 03 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=80: 01 00 01 00 00 00 80 00 00 00 00 00 00 00 00 01
+CBPROBE: cfg fn=1 off=90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=A0: D0 20 00 86 00 00 00 0C 00 00 00 00 00 D1 00 00
+CBPROBE: cfg fn=1 off=B0: CF 3F 3F 3F 20 10 08 0A 00 01 01 10 00 3F 02 00
+CBPROBE: cfg fn=1 off=C0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=D0: 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=E0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=F0: 00 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00
+CBPROBE: bridges=2
+
+## 2. CBINIT (CBINIT.TXT -- ToPIC95 bring-up)
+CBINIT: Ferric DOS ToPIC95 CardBus bridge bring-up (Gate 4b.3)
+CBINIT: slot=0 stage=3 rev=0x32 bus=2 bar0=0xF7E00000 mem0=0xF7D00000 state=0x30000007 card=0 cb32=0 pwr3v=0
+CBINIT: slot=1 stage=3 rev=0x32 bus=3 bar0=0xF7E01000 mem0=0xF7C00000 state=0x30000007 card=0 cb32=0 pwr3v=0
+CBINIT: bridges=2 cards=0
+
+## 3. Post-CBINIT (CB.TXT -- programmed ToPIC95 state)
+Ferric DOS CardBus bridge probe
+CBPROBE: fn=0 present=1 id=1179:0617 rev=32 class=060700 hdr=82 cmd=0007 stat=0490 bar0=F7E00000 bus=80/00/80 intline=0B intpin=01 ppbcn=0040 wben=0 scr=00000001 slotctl=D0 intctl=11 cardet=86 pc32=1 vs=1/1 swdet=0 rcr=0C000000
+CBPROBE: cfg fn=0 off=00: 79 11 17 06 07 00 90 04 32 00 07 06 00 A8 82 00
+CBPROBE: cfg fn=0 off=10: 00 00 E0 F7 80 00 80 04 00 02 02 00 00 00 D0 F7
+CBPROBE: cfg fn=0 off=20: 00 F0 DF F7 00 F0 FF FF 00 00 00 00 FC FF 00 00
+CBPROBE: cfg fn=0 off=30: 00 00 00 00 FC FF 00 00 00 00 00 00 0B 01 40 00
+CBPROBE: cfg fn=0 off=40: 79 11 01 00 01 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=80: 01 00 01 00 00 00 80 00 00 00 00 00 00 00 00 01
+CBPROBE: cfg fn=0 off=90: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=A0: D0 11 00 86 00 00 00 0C 00 80 00 00 00 D1 00 00
+CBPROBE: cfg fn=0 off=B0: CF 3F 3F 3F 20 10 08 0A 00 01 01 10 00 3F 02 00
+CBPROBE: cfg fn=0 off=C0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=D0: 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=E0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=0 off=F0: 00 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00
+CBPROBE: fn=1 present=1 id=1179:0617 rev=32 class=060700 hdr=82 cmd=0007 stat=0490 bar0=F7E01000 bus=80/00/80 intline=0B intpin=01 ppbcn=0040 wben=0 scr=00000001 slotctl=D0 intctl=11 cardet=86 pc32=1 vs=1/1 swdet=0 rcr=0C000000
+CBPROBE: cfg fn=1 off=00: 79 11 17 06 07 00 90 04 32 00 07 06 00 A8 82 00
+CBPROBE: cfg fn=1 off=10: 00 10 E0 F7 80 00 80 04 00 03 03 00 00 00 C0 F7
+CBPROBE: cfg fn=1 off=20: 00 F0 CF F7 00 F0 FF FF 00 00 00 00 FC FF 00 00
+CBPROBE: cfg fn=1 off=30: 00 00 00 00 FC FF 00 00 00 00 00 00 0B 01 40 00
+CBPROBE: cfg fn=1 off=40: 79 11 01 00 01 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=80: 01 00 01 00 00 00 80 00 00 00 00 00 00 00 00 01
+CBPROBE: cfg fn=1 off=90: 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=A0: D0 11 00 86 00 00 00 0C 00 00 00 00 00 D1 00 00
+CBPROBE: cfg fn=1 off=B0: CF 3F 3F 3F 20 10 08 0A 00 01 01 10 00 3F 02 00
+CBPROBE: cfg fn=1 off=C0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=D0: 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=E0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+CBPROBE: cfg fn=1 off=F0: 00 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00
+CBPROBE: bridges=2
+
+## 4. CBINIT after PIT delay + CB_CVSTEST (commit 369babc, D-Link DWL-G630 C2 inserted in slot 0)
+CBINIT: Ferric DOS ToPIC95 CardBus bridge bring-up (Gate 4b.3)
+CBINIT: slot=0 stage=3 rev=0x32 bus=2 bar0=0xF7E00000 mem0=0xF7D00000 state=0x30000001 card=1 cb32=0 pwr3v=0
+CBINIT: slot=1 stage=3 rev=0x32 bus=3 bar0=0xF7E01000 mem0=0xF7C00000 state=0x30000007 card=0 cb32=0 pwr3v=0
+CBINIT: bridges=2 cards=0
+
+Note: Slot 0 transitioned from 0x30000007 (CD1=1,CD2=1) to 0x30000001 (CD1=0,CD2=0, card=1) with voltage/type bits still pending (SS_PENDING) while CRST was held. Follow-up commit 6ae1446 clears CRST + ExCA power before CB_CVSTEST and polls the full 250-500 ms window.
+
+## 5. CBINIT PASS -- 3.3 V CardBus power + AR2413 enumeration (commit 30094b0, CBINIT3.TXT)
+CBINIT: Ferric DOS ToPIC95 CardBus bridge bring-up (Gate 4b.3)
+CBINIT: slot=0 stage=5 rev=0x32 bus=2 bar0=0xF7E00000 mem0=0xF7D00000 state=0x30000820 card=1 cb32=1 pwr3v=1
+CBINIT: card slot=0 id=168C:001A rev=0x01 class=0x020000 subsys=1186:3B08 bar0=0xF7D00000
+CBINIT: slot=1 stage=3 rev=0x32 bus=3 bar0=0xF7E01000 mem0=0xF7C00000 state=0x30000087 card=0 cb32=0 pwr3v=0
+CBINIT: bridges=2 cards=1
+
+## 6. WPROBE PASS -- AR2413 MAC/PHY/EEPROM + Hardware AES-CCM (commit 30094b0, WPROBE.TXT)
+WPROBE: Ferric DOS Atheros AR2413 MAC/EEPROM probe (Gate 4b.4a)
+WPROBE: present=1 stage=4 slot=0 id=168C:001A bar0=0xF7D00000
+WPROBE: srev=0x00000078 phy=0x00000045
+WPROBE: ee_magic=0x5AA5 ee_ver=0x5001 ee_hdr=0x0A6E misc5=0x0005 regdom=0x0010
+WPROBE: mac=<redacted> mac_ok=1 aes_hw=1

@@ -1,0 +1,44 @@
+# Toshiba DynaBook SS 2000M — Gate 4b.4b / 4b.5 / 4b.6 Wi-Fi Hardware Proof
+
+> Redacted for publication: the unit serial, the station MAC, the AP
+> BSSID, and the LAN addresses were replaced with placeholders, so the
+> frame dumps below are no longer checksum-consistent. Everything else
+> is the original capture.
+
+- **Date:** 2026-11-22
+- **Machine:** Toshiba DynaBook SS 2000M (`serial redacted`, Pentium III-M 750 MHz, 256 MB SDRAM)
+- **CardBus Bridge:** Toshiba ToPIC95/100 (`1179:0617` rev `0x32`, PCI `00:11.0`, Slot 0, 3.3 V CardBus, bus 2)
+- **Wi-Fi Card:** D-Link DWL-G630 Rev C2 (Atheros AR2413 `168C:001A` rev `0x01`, subsys `1186:3B08`, `srev=0x78`, `phy=0x45`, EEPROM v5.1 `0x5AA5`, MAC `00-13-46-XX-XX-XX`, `aes_hw=1`)
+- **Build:** `af1a0a5` (PXE `ferric-dos-pxe.img`, `SHA256=9D43242DCBE9EDB5EC889944B70E12E4CBCC414F111598DAF637F0296CB2BF23`)
+- **Test Network:** Private WPA2-PSK (AES-CCMP) 2.4 GHz AP (passphrase and neighbor APs redacted)
+
+## Verification Summary (Ethernet Physically Unplugged)
+
+1. **`WSCAN.COM` (Gate 4b.4b):** Passive 2.4 GHz beacon scan across channels 1–11 enumerated live WPA2 APs (`rssi=55+`).
+2. **`WCONN.COM` (Gate 4b.5):** Completed 802.11 Open-System Auth + Assoc (RSN IE) + PBKDF2-HMAC-SHA1 + WPA2 4-Way Handshake (M1->M2->M3->M4) + AR2413 hardware AES-CCM RX key cache (PTK Slot 4 + GTK Slot 1..3) + IEEE 802.11i software AES-128-CCM TX encryption, and switched `INT 60h` to Wi-Fi (`status=0`).
+3. **`mTCP` over Wi-Fi (Gate 4b.6, Ethernet unplugged):**
+   - `DHCP`: Obtained full DHCP lease (`192.168.0.215`, `LTX(314)` DHCP Request -> `LRXU(355,r=1C)` DHCP ACK).
+   - `PING`: Clean replies from gateway (`192.168.0.1`), `8.8.8.8`, and DNS-resolved `google.com`.
+   - `FTPSRV`: Full TCP file transfer of `WDIAG7.TXT` directly over WPA2-PSK Wi-Fi with Ethernet unplugged.
+   - `WPROBE /E` & `WPROBE /W`: Verified live `INT 60h` adapter switching between Intel 82550 Ethernet and Atheros AR2413 Wi-Fi without reboot.
+4. **Negative test (wrong passphrase):** `WCONN "EXAMPLE-AP" <wrong_passphrase>` returned `status=6` cleanly without hanging or corrupting state.
+
+## Live `WPROBE /D` Capture (`WDIAG7.TXT`, Ethernet Unplugged)
+
+```text
+WDIAG: conn=1 ch=1 prot=1 seq=27 pn=23 ticks=1351
+TX: tot=22 ok=22 xret=0 fifo=0 filt=0 tmo=0 rets=0 s0=34A50001 s1=00066033
+RX: tot=140 ok=140 dec_ok=136 dec_f=0 rearm=0 rssi=48
+UCAST: tot=23 arp=8 ip=15 nd=0 ndfc=0000 NET: rx=46 drp=111 tx=22 err=0
+LTX(314): FFFFFFFFFFFF001346XXXXXX08004500012C00010000FF11BAC000000000FFFFFFFF004400430118BCDA010106007E31
+LRXU(355,r=1C): 001346XXXXXXXXXXXX080045100155000000008011B35FC0A80001C0A800D7004300440141940F020106007E31
+RXERR: key=0 dec=0 mic=0 crc=0 phy=0 oth=0 s0=130D8064 s1=B6AD0203
+MAC: CR=00000004 TXCFG=00000015 RXCFG=00000005 STA1=1300XXXX DANT=00000001 RFILT=00000005 DIAG=00000000
+KEY4: T=00000006 M0=45455606 M1=0000D7F0 BSS0=XXXXXXXX BSS1=XXXXXXXX
+ANT: CTL=00000001 SW0=21865942 SW1=228A6981 FDIV=D03E6788 AGC=00009D10
+PHY: SET=137218A2 GAIN=0019CA64 DES=0C98B0DA G2G=0266C140 CTL3=0A020001 CTL4=00000E0E
+PHY2: NF=0CF9CE00 NFTHR=000003FF IQ=05100880 PWADJ=00000000 RG1=0CC75380 RG5=0C30C16A
+PWR: R1=1E1F2022 R2=0A0B0C0D RMAX=0000003F R3=20202020 R4=20202020
+EE11G: ver=5001 misc0=81CC idle=0 swA=21865942 swB=228A6981
+EE11G2: ob=3 db=5 adc=218 pga=176 nf=-1 xpaE=14 xpaD=0 xlna=0 t62=28 mrg=25
+```

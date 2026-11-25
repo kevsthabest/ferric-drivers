@@ -1,0 +1,25 @@
+# DynaBook SS 2000M -- Gate 2.3 Intel 82550 Ethernet Capture (2026-11-21)
+
+> Redacted for publication: the station MAC address was replaced with
+> a placeholder. Everything else is the original capture.
+
+Hardware: Toshiba DynaBook SS 2000M (Intel 82550 8086:1229 rev 0D, PCI 00:0A.0, BAR1 0xEEC0, IRQ 11)
+Profile: Connected (Option 2: JEMMEX + FERRIC.JLM + HDPMI32i + G1LIVE + NETINIT.COM)
+Fixes verified:
+- e46c292: 22-byte Intel 8255x Configure array (MII mode, SF Flexible Mode TX, CUC_START, BMSR double-read)
+- f628dfa: IRQ 11 EOI + claim when 82550 owns SCB_ACK, master PIC cascade bit 2 unmask, ES:0000 upcall accept
+
+## 1. NTEST.COM output (NTEST2.TXT)
+NTEST: found=1 int=60
+NTEST: stage=6 io=EEC0 irq=11 link=1 macsrc=1 irqcnt=19
+NTEST: ver=0101 class=1 name=Ferric DOS Intel 82550 packet driver
+NTEST: mac=<redacted>
+NTEST: stats rx=0 tx=1
+NTEST:SUMMARY found=1 mac_ok=1 arp=0
+NTEST: FAIL
+
+Note: NTEST.COM sends a hardcoded ARP probe to QEMU's 10.0.2.2 gateway (absent on the local LAN), so arp=0 is expected on physical LAN.
+
+## 2. Live LAN proof (confirmed 2026-11-21)
+- mTCP DHCP acquired a live lease from TFTPD64 over the Ferric DOS INT 60h packet driver.
+- mTCP FTPSRV (from C:\Stack\) transferred CBINIT.TXT, CBINIT2.TXT, and NTEST2.TXT cleanly from the DynaBook to the desktop over Ethernet.

@@ -1,0 +1,26 @@
+# Toshiba DynaBook SS 2000M — NEC uPD720100A EHCI Silicon Capture (2026-11-24)
+# Command: EHCPROBE /B > EHC7.TXT (commit fd70243)
+# Result: FULL STAGE H PASS —
+#   - EHCI (00:0C.2) running at BAR0=0xFE000000
+#   - Companion OHCI #2 (00:0C.1) brought up at BAR0=0xFE001000
+#   - USB 2.0 64 GB exFAT flash drive mounted on port2 (120,845,300 sectors, speed=high, owner=ehci)
+#   - Full-speed device on port3 handed cleanly to owner=companion1 (zero stranded ports!)
+
+EHCI: 1033:00E0 at 00:0C.2
+EHCI: bar0=0xFE000000 assigned
+EHCI: hciversion=0x0095 caplen=32
+EHCI: hcsparams=0x00002395 ports=5 companions=2 per-companion=3 ppc=1 routing=1
+EHCI: hccparams=0x00000002 eecp=0x00 addr64=0 park=0 pfl=1
+EHCI: legsup=none
+EHCI: 1033:00E0 at 00:0C.2
+EHCI: handoff n/a (no legacy support)
+EHCI: running
+EHCI: comp1 1033:0035 at 00:0C.1 bar0=0xFE001000 running
+EHCI: msc port=2 addr=1 sectors=120845300 fs=EXFAT
+EHCI: usbsts=0x00008005 halted=0 async=1 periodic=0
+EHCI: configflag=1
+EHCI: port0 connect=0 enabled=0 line=SE0 speed=none owner=ehci
+EHCI: port1 connect=0 enabled=0 line=SE0 speed=none owner=ehci
+EHCI: port2 connect=1 enabled=1 line=SE0 speed=high owner=ehci
+EHCI: port3 connect=0 enabled=0 line=J speed=none owner=companion1
+EHCI: port4 connect=0 enabled=0 line=SE0 speed=none owner=ehci
