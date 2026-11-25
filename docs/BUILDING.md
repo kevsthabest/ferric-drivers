@@ -7,6 +7,25 @@ plain `cargo build` does **not** produce a usable module — it stops
 halfway, at a Rust static library that still needs linking,
 conversion, assembly, and packaging before Jemm will load it.
 
+## Building one driver at a time
+
+Each row below is one command, run from the repository root inside
+the pinned container. The satellite builds read gate1-svc's linker
+script and converter from the source tree, so no other module needs
+to be built first.
+
+| Command | Produces |
+| --- | --- |
+| `sh crates/gate1-svc/build.sh` | `out/FERRIC.JLM` — the resident core, which also hosts the Ethernet, Wi-Fi, USB OHCI, and audio drivers; they are not separate modules and cannot be built apart from the core |
+| `sh crates/ferric-exfat/build.sh` | `out/EXFAT.JLM` |
+| `sh crates/ferric-ntfs/build.sh` | `out/NTFS.JLM` |
+| `sh crates/ferric-vbe/build.sh` | `out/VBE.JLM` |
+| `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
+
+Three crates have no build script of their own — `abi`, `wifi-core`,
+and `ferric-ehci` are libraries, and they compile in as dependencies
+of the builds above.
+
 ## Toolchain
 
 - The pinned container image, `ferric-dos-build` (see the
