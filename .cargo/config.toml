@@ -1,0 +1,7 @@
+[build]
+target = "targets/i386-unknown-none.json"
+
+[unstable]
+json-target-spec = true
+build-std = ["core"]
+build-std-features = ["compiler-builtins-mem"]

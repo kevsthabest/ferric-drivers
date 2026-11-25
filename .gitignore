@@ -1,0 +1,24 @@
+# Rust build output
+/target/
+**/target/
+# Cargo.lock is committed on purpose: pinned, reproducible builds.
+
+# Build artifacts and disk images
+/build/
+/out/
+*.img
+*.ima
+*.vhd
+*.qcow2
+
+# Docker
+.docker/
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+__pycache__/

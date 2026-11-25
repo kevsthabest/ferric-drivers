@@ -1,0 +1,10 @@
+[package]
+name = "wifi-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gate 4b 802.11 frame handling and WPA2-Personal key hierarchy (no_std, host-verified against published vectors)"
+
+[lib]
+name = "wifi_core"
+path = "src/lib.rs"

@@ -1,0 +1,13 @@
+[package]
+name = "gate1-svc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+abi = { path = "../abi" }
+wifi-core = { path = "../wifi-core" }
+ferric-ehci = { path = "../ferric-ehci" }

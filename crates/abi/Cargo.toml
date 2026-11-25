@@ -1,0 +1,10 @@
+[package]
+name = "abi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared versioned DOS-to-Rust ABI records, bounce-buffer rules, and Gate 0 HWSCAN types"
+
+[lib]
+name = "abi"
+path = "src/lib.rs"
