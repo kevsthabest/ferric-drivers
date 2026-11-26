@@ -1199,11 +1199,21 @@ print_crlf:
 ; =============================================================================
 find_ferric_jlm:
         push es
+        ; Prefer standalone PMU.JLM (0xFD05); fall back to FERRIC.JLM (0xFD01).
+        xor di, di
+        mov es, di
+        mov ax, 0x1684
+        mov bx, 0xFD05
+        int 0x2F
+        mov ax, es
+        or ax, di
+        jnz .ffj_found
         xor di, di
         mov es, di
         mov ax, 0x1684
         mov bx, 0xFD01
         int 0x2F
+.ffj_found:
         mov [jlm_off], di
         mov ax, es
         mov [jlm_seg], ax

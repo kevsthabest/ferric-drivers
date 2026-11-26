@@ -20,6 +20,8 @@ to be built first.
 | `sh crates/ferric-exfat/build.sh` | `out/EXFAT.JLM` |
 | `sh crates/ferric-ntfs/build.sh` | `out/NTFS.JLM` |
 | `sh crates/ferric-vbe/build.sh` | `out/VBE.JLM` |
+| `sh crates/ferric-pmu/build.sh` | `out/PMU.JLM` (standalone ALi M7101 PMU, `0xFD05` — no `FERRIC.JLM` required) |
+| `sh crates/ferric-sd/build.sh` | `out/TOSHSD.JLM` (standalone Toshiba TC6371AF SD slot, `0xFD06` — no `FERRIC.JLM` required) |
 | `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
 | `drivers/vsbhda/build.sh` | `ALI5451.DRV` / `ALIDET.DRV` — 32-bit external ALi M5451 backend for upstream VSBHDA v2.1 (see [`drivers/vsbhda/README.md`](../drivers/vsbhda/README.md) for the two external source checkouts required) |
 

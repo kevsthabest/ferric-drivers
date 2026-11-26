@@ -25,6 +25,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferric-pmu"
+version = "0.1.0"
+
+[[package]]
+name = "ferric-sd"
+version = "0.1.0"
+
+[[package]]
 name = "ferric-vbe"
 version = "0.1.0"
 dependencies = [

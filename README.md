@@ -36,6 +36,8 @@ modules plug into the core. Each driver set has its own section under
 | [Filesystems](docs/drivers/filesystems.md) | `EXFAT.JLM` (`0xFD02`), `NTFS.JLM` (`0xFD03`) | exFAT (read/write, with an INT 2Fh redirector) and NTFS (read-only) on top of the core's block services |
 | [VBE](docs/drivers/vbe.md) | `VBE.JLM` (`0xFD04`) | VBE linear-framebuffer 2D acceleration: a generic software engine plus Trident CyberBlade XP hardware acceleration |
 | [Audio](docs/drivers/audio.md) | in the core + [`drivers/vsbhda/`](drivers/vsbhda/) | ALi M5451 AC'97 with built-in Sound Blaster Pro / OPL / SoundFont support, plus a standalone 32-bit VSBHDA backend (`ALI5451.DRV`) |
+| [Power Management](docs/drivers/pmu.md) | `PMU.JLM` (`0xFD05`) | Standalone ALi M7101 PMU driver: Smart Battery telemetry (SMBus), CPU clock throttling (`P_CNTRL`), and LCD CCFT backlight PWM (`PWRCTL.COM`) |
+| [Toshiba SD Slot](docs/drivers/sd.md) | `TOSHSD.JLM` (`0xFD06`) | Standalone read-only Toshiba TC6371AF (`1179:0805` / `1179:0803`) built-in SD card slot driver (`SDPROBE.COM`) |
 
 Hardware evidence — what was proven on the development machine, and
 the limits that come with it — is in

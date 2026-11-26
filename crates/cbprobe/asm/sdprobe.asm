@@ -20,7 +20,18 @@ start:
         push cs
         pop es
 
-        ; Discover FERRIC.JLM via INT 2Fh AX=1684h BX=0xFD01
+        ; Prefer standalone TOSHSD.JLM (0xFD06); fall back to FERRIC.JLM (0xFD01).
+        xor di, di
+        mov es, di
+        mov ax, 0x1684
+        mov bx, 0xFD06
+        int 0x2F
+        mov [jlm_off], di
+        mov ax, es
+        mov [jlm_seg], ax
+        or ax, di
+        jnz .have_jlm
+
         xor di, di
         mov es, di
         mov ax, 0x1684
