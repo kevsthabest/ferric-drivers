@@ -801,6 +801,95 @@ fn snapshot_info(st: &AudioState, cso_start: u16, cso_end: u16, cso_changes: u32
 // Exported Ring-0 C ABI entry points called from jlm_stub.asm
 // ---------------------------------------------------------------------
 
+fn route_audio_irq(st: &mut AudioState) {
+    // Route ALi M5451 (00:06.0 INTA#) onto shared level-triggered PCI IRQ 11
+    // (nibble 0x09 in ALi M1533 irqmap). Scan BIOS ROM 0xF0000..0xFFFF0 for
+    // the $PIR PCI IRQ Routing Table to get the exact M1533 link byte for
+    // 00:06.0 INTA#, then apply Linux's exact pirq_ali_set(0x48, link-1, 9).
+    let mut pir_link: u8 = 0;
+    let mut pir_bmap: u16 = 0;
+    unsafe {
+        let mut off = 0x000F_0000usize;
+        while off < 0x000F_FFF0 {
+            let sig = core::ptr::read_volatile(off as *const u32);
+            if sig == 0x5249_5024 {
+                let sz = core::ptr::read_volatile((off + 6) as *const u16) as usize;
+                if sz >= 32 && sz <= 4096 && (off + sz) <= 0x0010_0000 {
+                    let mut sum: u8 = 0;
+                    for i in 0..sz {
+                        sum = sum.wrapping_add(core::ptr::read_volatile((off + i) as *const u8));
+                    }
+                    if sum == 0 {
+                        let mut e = off + 32;
+                        while e + 16 <= off + sz {
+                            let eb = core::ptr::read_volatile(e as *const u8);
+                            let ed = core::ptr::read_volatile((e + 1) as *const u8) >> 3;
+                            if eb == st.bus && ed == st.dev {
+                                pir_link = core::ptr::read_volatile((e + 2) as *const u8);
+                                pir_bmap = core::ptr::read_volatile((e + 3) as *const u16);
+                                break;
+                            }
+                            e += 16;
+                        }
+                        break;
+                    }
+                }
+            }
+            off += 16;
+        }
+    }
+    st.diag_gc_sts = ((pir_link as u32) << 16) | (pir_bmap as u32);
+
+    if let Some((b, d, f)) = st.m1533_bdf {
+        unsafe {
+            if pir_link >= 1 && pir_link <= 16 {
+                let nr = (pir_link - 1) as u8;
+                let reg = 0x48u8 + (nr >> 1);
+                let aligned = reg & 0xFC;
+                let byte_shift = ((reg & 3) as u32) * 8;
+                let nib_shift = byte_shift + if (nr & 1) != 0 { 4 } else { 0 };
+                let dw = pci_read32(b, d, f, aligned);
+                let new_dw = (dw & !(0x0Fu32 << nib_shift)) | (0x09u32 << nib_shift);
+                pci_write32(b, d, f, aligned, new_dw);
+            } else if pir_link >= 0x40 && pir_link <= 0x7F {
+                let aligned = pir_link & 0xFC;
+                let byte_shift = ((pir_link & 3) as u32) * 8;
+                let dw = pci_read32(b, d, f, aligned);
+                let new_dw = (dw & !(0x0Fu32 << byte_shift)) | (0x09u32 << byte_shift);
+                pci_write32(b, d, f, aligned, new_dw);
+            } else {
+                let r74 = pci_read32(b, d, f, 0x74);
+                let new74 = (r74 & 0xFFFF_F0F0) | 0x0000_0909;
+                pci_write32(b, d, f, 0x74, new74);
+            }
+            let r3c = pci_read32(st.bus, st.dev, st.func, 0x3C);
+            pci_write32(st.bus, st.dev, st.func, 0x3C, (r3c & 0xFFFF_FF00) | 11);
+            st.irq_line = 11;
+            // Unmask IRQ 11 on slave PIC (0xA1 bit 3) and cascade IRQ 2 on master PIC (0x21 bit 2)
+            let m2 = crate::inb(0xA1);
+            io_outb(0xA1, m2 & !0x08);
+            let m1 = crate::inb(0x21);
+            io_outb(0x21, m1 & !0x04);
+        }
+    }
+}
+
+/// Prepare the codec and PCI interrupt route on a fresh boot. The external
+/// driver owns the DMA allocation, interrupt handler and voice from here.
+#[unsafe(no_mangle)]
+pub extern "C" fn gate1_audio_external_prepare() -> u32 {
+    if unsafe { (*AUDIO.0.get()).initialized } {
+        return 6;
+    }
+    let rc = gate1_audio_init(0, 0, 0);
+    if rc != 0 {
+        return rc;
+    }
+    let st = unsafe { &mut *AUDIO.0.get() };
+    route_audio_irq(st);
+    if st.irq_line == 11 { 0 } else { 7 }
+}
+
 /// `AX=0x0020`: Initialize ALi M5451 AC'97 audio controller.
 /// `dma_seg`: real-mode segment of a 16 KiB DOS DMA buffer (or 0 to reuse existing).
 /// `flags`: bit 0 = invert EAPD bit 15 in AC97_POWERDOWN.
@@ -1081,76 +1170,7 @@ pub extern "C" fn gate1_audio_sb_start(dma_seg: u32, out_ptr: u32) -> u32 {
     unsafe { populate_wavetable_rom(st.dma_lin) };
     crate::sb_opl::reset_all();
 
-    // Route ALi M5451 (00:06.0 INTA#) onto shared level-triggered PCI IRQ 11
-    // (nibble 0x09 in ALi M1533 irqmap). Scan BIOS ROM 0xF0000..0xFFFF0 for
-    // the $PIR PCI IRQ Routing Table to get the exact M1533 link byte for
-    // 00:06.0 INTA#, then apply Linux's exact pirq_ali_set(0x48, link-1, 9).
-    let mut pir_link: u8 = 0;
-    let mut pir_bmap: u16 = 0;
-    unsafe {
-        let mut off = 0x000F_0000usize;
-        while off < 0x000F_FFF0 {
-            let sig = core::ptr::read_volatile(off as *const u32);
-            if sig == 0x5249_5024 {
-                let sz = core::ptr::read_volatile((off + 6) as *const u16) as usize;
-                if sz >= 32 && sz <= 4096 && (off + sz) <= 0x0010_0000 {
-                    let mut sum: u8 = 0;
-                    for i in 0..sz {
-                        sum = sum.wrapping_add(core::ptr::read_volatile((off + i) as *const u8));
-                    }
-                    if sum == 0 {
-                        let mut e = off + 32;
-                        while e + 16 <= off + sz {
-                            let eb = core::ptr::read_volatile(e as *const u8);
-                            let ed = core::ptr::read_volatile((e + 1) as *const u8) >> 3;
-                            if eb == st.bus && ed == st.dev {
-                                pir_link = core::ptr::read_volatile((e + 2) as *const u8);
-                                pir_bmap = core::ptr::read_volatile((e + 3) as *const u16);
-                                break;
-                            }
-                            e += 16;
-                        }
-                        break;
-                    }
-                }
-            }
-            off += 16;
-        }
-    }
-    st.diag_gc_sts = ((pir_link as u32) << 16) | (pir_bmap as u32);
-
-    if let Some((b, d, f)) = st.m1533_bdf {
-        unsafe {
-            if pir_link >= 1 && pir_link <= 16 {
-                let nr = (pir_link - 1) as u8;
-                let reg = 0x48u8 + (nr >> 1);
-                let aligned = reg & 0xFC;
-                let byte_shift = ((reg & 3) as u32) * 8;
-                let nib_shift = byte_shift + if (nr & 1) != 0 { 4 } else { 0 };
-                let dw = pci_read32(b, d, f, aligned);
-                let new_dw = (dw & !(0x0Fu32 << nib_shift)) | (0x09u32 << nib_shift);
-                pci_write32(b, d, f, aligned, new_dw);
-            } else if pir_link >= 0x40 && pir_link <= 0x7F {
-                let aligned = pir_link & 0xFC;
-                let byte_shift = ((pir_link & 3) as u32) * 8;
-                let dw = pci_read32(b, d, f, aligned);
-                let new_dw = (dw & !(0x0Fu32 << byte_shift)) | (0x09u32 << byte_shift);
-                pci_write32(b, d, f, aligned, new_dw);
-            } else {
-                let r74 = pci_read32(b, d, f, 0x74);
-                let new74 = (r74 & 0xFFFF_F0F0) | 0x0000_0909;
-                pci_write32(b, d, f, 0x74, new74);
-            }
-            let r3c = pci_read32(st.bus, st.dev, st.func, 0x3C);
-            pci_write32(st.bus, st.dev, st.func, 0x3C, (r3c & 0xFFFF_FF00) | 11);
-            st.irq_line = 11;
-            // Unmask IRQ 11 on slave PIC (0xA1 bit 3) and cascade IRQ 2 on master PIC (0x21 bit 2)
-            let m2 = crate::inb(0xA1);
-            io_outb(0xA1, m2 & !0x08);
-            let m1 = crate::inb(0x21);
-            io_outb(0x21, m1 & !0x04);
-        }
-    }
+    route_audio_irq(st);
 
     let delta = convert_playback_rate(crate::sb_opl::MIX_RATE);
     // Start in 86.1 Hz hardware IRQ 11 mode (512-frame / 23.2 ms ring, 256 frames

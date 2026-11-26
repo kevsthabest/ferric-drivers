@@ -160,8 +160,15 @@ start:
         mov ax, 0x4C00
         int 0x21
 
-; Call FERRIC.JLM AX=0x002A (BX=cmd, CX=val) and unpack EAX into ch_vals[0..3].
+; Call FERRIC.JLM AX=0x002A (BX=cmd, CX=val) and also sync with the live
+; Sound Blaster Pro/16 mixer ports (0x224/0x225) so MIXER works seamlessly
+; under both VSBHDA (Menu 1) and FERRIC.JLM's internal SB engine (Menu 9).
+SB_MIX_ADDR     equ 0x224
+SB_MIX_DATA     equ 0x225
+
 call_mixer:
+        push bx
+        push cx
         mov ax, 0x002A
         call far [jlm_off]
         mov [ch_vals + 0], al
@@ -169,6 +176,100 @@ call_mixer:
         shr eax, 16
         mov [ch_vals + 2], al
         mov [ch_vals + 3], ah
+        pop cx
+        pop bx
+
+        cmp bx, 0
+        je .cm_query_sb
+        cmp bx, 2
+        je .cm_set_master
+        cmp bx, 3
+        je .cm_set_voice
+        cmp bx, 4
+        je .cm_set_fm
+        cmp bx, 5
+        je .cm_reset_sb
+        ret
+
+.cm_query_sb:
+        ; Probe SB Pro Output/Filter register (0x0E): returns non-0xFF when
+        ; VSBHDA or AUDPROBE traps ports 0x224/0x225.
+        mov al, 0x0E
+        call sb_mix_read
+        cmp al, 0xFF
+        je .cm_done
+        mov al, 0x22            ; SB Master (LLLLRRRR)
+        call sb_mix_read
+        shr al, 4
+        mov [ch_vals + 1], al
+        mov al, 0x04            ; SB Voice / SFX
+        call sb_mix_read
+        shr al, 4
+        mov [ch_vals + 2], al
+        mov al, 0x26            ; SB FM / Music
+        call sb_mix_read
+        shr al, 4
+        mov [ch_vals + 3], al
+        ret
+
+.cm_set_master:
+        mov al, 0x22
+        mov ah, cl
+        call sb_mix_write_nibble
+        mov [ch_vals + 1], cl
+        ret
+
+.cm_set_voice:
+        mov al, 0x04
+        mov ah, cl
+        call sb_mix_write_nibble
+        mov [ch_vals + 2], cl
+        ret
+
+.cm_set_fm:
+        mov al, 0x26
+        mov ah, cl
+        call sb_mix_write_nibble
+        mov [ch_vals + 3], cl
+        ret
+
+.cm_reset_sb:
+        mov al, 0x22
+        mov ah, 12
+        call sb_mix_write_nibble
+        mov al, 0x04
+        mov ah, 12
+        call sb_mix_write_nibble
+        mov al, 0x26
+        mov ah, 12
+        call sb_mix_write_nibble
+        mov byte [ch_vals + 1], 12
+        mov byte [ch_vals + 2], 12
+        mov byte [ch_vals + 3], 12
+.cm_done:
+        ret
+
+; Read SB mixer register AL from 0x224/0x225 -> AL.
+sb_mix_read:
+        mov dx, SB_MIX_ADDR
+        out dx, al
+        mov dx, SB_MIX_DATA
+        in al, dx
+        ret
+
+; Write 4-bit level AH (0..15) duplicated to both stereo nibbles of SB mixer reg AL.
+sb_mix_write_nibble:
+        push ax
+        mov dx, SB_MIX_ADDR
+        out dx, al
+        mov al, ah
+        and al, 0x0F
+        mov ah, al
+        shl al, 4
+        or al, ah
+        mov dx, SB_MIX_DATA
+        out dx, al
+        pop ax
         ret
 
 clear_screen:

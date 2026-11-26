@@ -35,7 +35,7 @@ modules plug into the core. Each driver set has its own section under
 | [USB](docs/drivers/usb.md) | in the core + `ferric-ehci` crate | OHCI host controller with HID and mass-storage classes; EHCI (USB 2.0) bring-up and companion routing |
 | [Filesystems](docs/drivers/filesystems.md) | `EXFAT.JLM` (`0xFD02`), `NTFS.JLM` (`0xFD03`) | exFAT (read/write, with an INT 2Fh redirector) and NTFS (read-only) on top of the core's block services |
 | [VBE](docs/drivers/vbe.md) | `VBE.JLM` (`0xFD04`) | VBE linear-framebuffer 2D acceleration: a generic software engine plus Trident CyberBlade XP hardware acceleration |
-| [Audio](docs/drivers/audio.md) | in the core | ALi M5451 AC'97 with Sound Blaster Pro / OPL emulation and SoundFont support |
+| [Audio](docs/drivers/audio.md) | in the core + [`drivers/vsbhda/`](drivers/vsbhda/) | ALi M5451 AC'97 with built-in Sound Blaster Pro / OPL / SoundFont support, plus a standalone 32-bit VSBHDA backend (`ALI5451.DRV`) |
 
 Hardware evidence — what was proven on the development machine, and
 the limits that come with it — is in

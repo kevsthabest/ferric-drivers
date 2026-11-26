@@ -1,15 +1,8 @@
 //! Gate 4b Step 4b.4a — Atheros AR2413 (ath5k) MAC/EEPROM bring-up probe.
 //!
-//! Verified against the Linux ath5k sources (`pci.c`, `attach.c`,
-//! `reset.c`, `reg.h`, `eeprom.h`, `ath5k.h`, pin `c44104f3` of the
-//! parent project's vendored reference tree; that tree is not part of
-//! this repository).
+//! Verified against `vendor/ref/linux-ath/ath5k/` (`pci.c`, `attach.c`,
+//! `reset.c`, `reg.h`, `eeprom.h`, `ath5k.h`, pin `c44104f3`).
 //! Strictly `#![no_std]`, 386-pure, and read-only with respect to storage.
-//!
-//! Provenance: the register definitions in this module derive from
-//! the ISC-licensed Linux ath5k and OpenBSD ar5k code. The upstream
-//! copyright and permission notices are reproduced verbatim in
-//! `NOTICES.md` at the repository root, as the ISC licence requires.
 
 use core::cell::UnsafeCell;
 

@@ -1,13 +1,5 @@
-//! Auto-generated AR2413 (RF2413) 802.11g initvals, generated from
-//! the Linux ath5k `initvals.c` tables (pin `c44104f3` of the parent
-//! project's vendored reference tree; that tree is not part of this
-//! repository, so this generated file is the shipped artifact — see
-//! `docs/BUILDING.md`). Generator: `scripts/gen_ath5k_initvals.py`.
-//!
-//! Provenance: the tables derive from the ISC-licensed Linux ath5k
-//! code (Floeter / Kossifidis / Slaby). The upstream copyright and
-//! permission notices are reproduced verbatim in `NOTICES.md` at
-//! the repository root, as the ISC licence requires.
+//! Auto-generated AR2413 (RF2413) 802.11g initvals from vendor/ref/linux-ath/ath5k/ (pin c44104f3).
+//! Regenerate with: python3 scripts/gen_ath5k_initvals.py
 
 pub const AR2413_11G_INITVALS: &[(u16, u32)] = &[
     (0x1040, 0x002FFC0F),

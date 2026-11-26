@@ -42,6 +42,7 @@ CLIENT_EDI              equ 0
 CLIENT_ESI              equ 4
 CLIENT_DS               equ 64
 PKT_BRIDGE_VECTOR       equ 0xF1        ; stub -> JLM bridge interrupt
+MOUSE_BRIDGE_VECTOR     equ 0xF2        ; DPMI 0300h INT 33h -> JLM bridge interrupt
 PKT_INT_VECTOR          equ 0x60        ; packet-driver vector (stub lives here)
 NET_DMA_PARAS           equ 1024        ; 16 KiB packet-driver DMA block
 DDB_STRUCT_SIZE         equ 80          ; sizeof(VxD_Desc_Block) in JLM.INC
@@ -126,6 +127,7 @@ extern gate1_sf2_commit
 extern gate1_sf2_unload
 extern gate1_sf2_status
 extern gate1_audio_init
+extern gate1_audio_external_prepare
 extern gate1_audio_chime
 extern gate1_audio_status
 extern gate1_audio_shutdown
@@ -179,6 +181,8 @@ mouse_irq_installed:
 mouse_ivt_patched:
     dd 0
 mouse_old_ivt33:
+    dd 0
+_mouse_bridge_oldvec:
     dd 0
 sb_traps_installed:
     dd 0
@@ -381,6 +385,8 @@ _v86_dispatch:
     je _v86_sb_dma_diag
     cmp eax, 0x29
     je _v86_audio_irq11
+    cmp eax, 0x2B
+    je _v86_audio_external_prepare
     cmp eax, 0x2A
     je _v86_sb_mixer_ctl
     cmp eax, 0x36
@@ -1124,6 +1130,15 @@ _v86_sf2_status:
     mov word [ebp + CLIENT_EAX], ax
     ret
 
+_v86_audio_external_prepare:
+    mov edx, esp
+    mov esp, wifi_r0_stack_top
+    push edx
+    call gate1_audio_external_prepare
+    pop esp
+    mov word [ebp + CLIENT_EAX], ax
+    ret
+
 ; AX=0x0020: Initialize ALi M5451 AC'97 audio controller.
 ; BX = 16 KiB DMA segment (or 0 to reuse), CX = flags (bit 0 = invert EAPD),
 ; ES:DI = 40-byte AudioInfo output buffer. Returns AX = 0 on success.
@@ -1308,10 +1323,13 @@ _v86_sb_dma_diag:
     mov word [ebp + CLIENT_EAX], ax
     ret
 
-; AX=0x0029: Service ALi M5451 hardware IRQ 11 (called from AUDPROBE's real-mode
+; AX=0x0029: Service shared PCI IRQ 11 (called from AUDPROBE's real-mode
 ; IVT 0x73 ISR when HDPMI32i reflects hardware IRQ 11 from PM32 to real mode).
-; Returns AL=1 if M5451 owned the interrupt (and PIC EOI was sent), AH=1 if a
-; pending SB IRQ 5 should be delivered via real-mode INT 0Dh.
+; Checks ALi M5451 first, then active Wi-Fi/NIC (gate1_net_service) so an
+; AR2413 RXOK IRQ during PM32 (e.g. DOOM) never falls through to the BIOS
+; default IVT 0x73 stub (which masks IRQ 11 on slave PIC 0xA1 and kills audio!).
+; Returns AL=1 if M5451 or NIC owned the interrupt (and PIC EOI was sent),
+; AH=pending SB IRQ count (0..4) to deliver via real-mode INT 0Dh.
 _v86_audio_irq11:
     mov edx, esp
     mov esp, audio_r0_stack_top
@@ -1319,8 +1337,7 @@ _v86_audio_irq11:
     call gate1_audio_irq11
     pop esp
     test eax, 1
-    jz .v86_a11_done
-    push eax
+    jz .v86_a11_try_net
     mov al, 0x20
     out 0xA0, al
     out 0x20, al
@@ -1329,7 +1346,15 @@ _v86_audio_irq11:
     add esp, 4
     mov ah, al                          ; AH = pending SB IRQ count (0..4)
     mov al, 1                           ; AL = 1 (M5451 owned IRQ 11)
-    add esp, 4                          ; discard saved eax
+    jmp .v86_a11_done
+.v86_a11_try_net:
+    call gate1_net_service
+    test eax, 1
+    jz .v86_a11_done
+    mov al, 0x20
+    out 0xA0, al
+    out 0x20, al
+    mov ax, 0x0001                      ; AL = 1 (NIC/Wi-Fi owned IRQ 11), AH = 0 (no SB IRQ)
 .v86_a11_done:
     mov word [ebp + CLIENT_EAX], ax
     ret
@@ -2032,6 +2057,21 @@ _mouse_deliver_cb:
 .mcb_done:
     ret
 
+; Bridge hook on V86 vector 0xF2 for 32-bit DPMI clients (DOOM / Dillo / DJGPP /
+; DOS4GW under HDPMI32i) that invoke INT 33h via DPMI 0300h: HDPMI32i jumps
+; directly to IVT[0x33] (0040:00F0), bypassing JEMM's V86 INT 33h chain hook.
+; Does NOT call _mouse_deliver_cb inside 0300h to avoid nesting; _timer_hookproc
+; delivers 000Ch callbacks on INT 1Ch.
+    dd _mouse_bridge_oldvec
+_mouse_bridge_hookproc:
+    pushad
+    push ebp
+    call gate1_mouse_api
+    add esp, 4
+    popad
+    clc                                 ; always claim private INT 0xF2 bridge
+    ret
+
 ; DOS mouse API hook on V86 vector 0x33. Two jobs per entry, in order:
 ; (1) if packet events are pending for a registered callback, fire it via
 ; _mouse_deliver_cb; (2) dispatch the API call itself to the Rust core.
@@ -2087,11 +2127,14 @@ DllMain:
     mov eax, INT33_VECTOR
     mov esi, _int33_hookproc
     VMMCall VMM_HOOK_V86_INT_CHAIN
+    mov eax, MOUSE_BRIDGE_VECTOR
+    mov esi, _mouse_bridge_hookproc
+    VMMCall VMM_HOOK_V86_INT_CHAIN
     mov dword [mouse_hooks_installed], 1
-    ; Populate real-mode IVT INT 33h (0000:00CC) with a non-IRET stub (`NOP; IRET`
-    ; at BDA IACA 0040:00F0) if currently zero OR pointing at a dummy IRET (0xCF)
-    ; stub installed by FreeDOS KERNEL.SYS, so DOS apps checking
-    ; `getvect(0x33) != NULL && *vec != 0xCF` proceed to invoke INT 33h.
+    ; Populate real-mode IVT INT 33h (0000:00CC) with a 3-byte bridge stub
+    ; (`INT 0xF2; IRET` = CD F2 CF at BDA IACA 0040:00F0..00F2) if currently zero
+    ; OR pointing at a dummy IRET (0xCF) stub installed by FreeDOS KERNEL.SYS.
+    ; Satisfies both real-mode getvect(0x33) checks and PM32 DPMI 0300h calls.
     mov eax, [0x000000CC]
     or eax, eax
     jz .do_patch_int33
@@ -2105,7 +2148,8 @@ DllMain:
 .do_patch_int33:
     mov eax, [0x000000CC]
     mov [mouse_old_ivt33], eax
-    mov word [0x000004F0], 0xCF90       ; NOP; IRET at 0040:00F0
+    mov word [0x000004F0], 0xF2CD       ; INT 0xF2 (CD F2) at 0040:00F0
+    mov byte [0x000004F2], 0xCF         ; IRET (CF) at 0040:00F2
     mov dword [0x000000CC], 0x004000F0  ; 0040:00F0
     mov dword [mouse_ivt_patched], 1
 .int33_ivt_kept:
@@ -2197,6 +2241,9 @@ DllMain:
 .detach_int33_hook:
     cmp dword [mouse_hooks_installed], 0
     je .detach_irq11
+    mov eax, MOUSE_BRIDGE_VECTOR
+    mov esi, _mouse_bridge_hookproc
+    VMMCall VMM_UNHOOK_V86_INT_CHAIN
     mov eax, INT33_VECTOR
     mov esi, _int33_hookproc
     VMMCall VMM_UNHOOK_V86_INT_CHAIN

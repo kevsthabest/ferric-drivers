@@ -13,7 +13,16 @@ the hardware evidence in the
   controller bring-up, voice playback, mixer. Verbs `0x0020`
   (init), `0x0021` (chime test), `0x0022` (status), `0x0023`
   (stop/mute), `0x0025` (volume), `0x0029` (IRQ service), `0x002A`
-  (mixer levels).
+  (mixer levels), `0x002B` (external driver codec + PCI IRQ prepare).
+- **`drivers/vsbhda/`** — standalone 32-bit external backend
+  (`ALI5451.C` -> `ALI5451.DRV` / `ALIDET.DRV`) for upstream
+  [VSBHDA](https://github.com/Baron-von-Riedesel/VSBHDA) v2.1. Calls
+  `FERRIC.JLM` verb `0x002B` during detection to bring up the ALi
+  M5451 codec, amplifier, and PCI IRQ 11 route, then hands voice 0
+  DMA and AC'97 mixer control directly to VSBHDA (supporting SB16,
+  48 kHz mixing, OPL3 FM, and MPU-401 TinySoundFont `.SF2` playback).
+  See [`drivers/vsbhda/README.md`](../../drivers/vsbhda/README.md) for
+  build and usage instructions.
 - **`crates/gate1-svc/src/sb_opl.rs`** — Sound Blaster Pro
   (`0x220`) and AdLib/OPL2/OPL3 emulation presented to DOS
   programs through I/O traps, plus MPU-401 support. Verbs

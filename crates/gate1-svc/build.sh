@@ -65,7 +65,7 @@ ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld \
     -u gate1_m7101_info -u gate1_m7101_set_throttle -u gate1_m7101_set_backlight \
     -u gate1_sd_init -u gate1_sd_read_sec -u gate1_sd_shutdown \
     -u gate1_sf2_begin -u gate1_sf2_write_chunk -u gate1_sf2_commit -u gate1_sf2_unload -u gate1_sf2_status \
-    -u gate1_audio_init -u gate1_audio_chime -u gate1_audio_status -u gate1_audio_shutdown \
+    -u gate1_audio_external_prepare -u gate1_audio_init -u gate1_audio_chime -u gate1_audio_status -u gate1_audio_shutdown \
     -u gate1_audio_sb_start -u gate1_audio_irq11 -u gate1_audio_poll -u gate1_audio_set_vol -u gate1_sb_io -u gate1_sb_take_irq -u gate1_sb_take_up_to -u gate1_sb_take_one_irq -u gate1_sb_diag -u gate1_sb_dma_diag -u gate1_sb_mixer_ctl \
     "${LIB_A}" -o "${JLM_RUST_OBJ}"
 python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"

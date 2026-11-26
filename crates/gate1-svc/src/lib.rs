@@ -1738,8 +1738,7 @@ mod tests {
     #[test]
     fn wifi_packet_driver_activation_preserves_regs_and_rcv_mode() {
         net_reset();
-        // Synthetic locally-administered fixture address, not a real card.
-        let wifi_mac = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let wifi_mac = [0x00, 0x13, 0x46, 0xD7, 0x84, 0x8A];
         net_activate_wifi(wifi_mac);
 
         // Register a wildcard Ethernet receiver via Crynwr access_type (AH=0x02).

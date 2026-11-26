@@ -107,9 +107,6 @@ const DATA_BUF_CAP: usize = 512;
 // Periodic Interrupt IN EDs/TDs for live USB HID Boot Mouse & Boot Keyboard
 // (all within the same single 4 KiB physical page as HCCA: 0x0000..0x06FF).
 const INTR_ED_MOUSE_REL: usize = 0x0600;
-const INTR_TD_MOUSE_REL: usize = 0x0620;
-const INTR_TD_MOUSE_DUMMY_REL: usize = 0x0640;
-const MOUSE_BUF_REL: usize = 0x0660;
 const INTR_ED_KBD_REL: usize = 0x0680;
 const INTR_TD_KBD_REL: usize = 0x06A0;
 const INTR_TD_KBD_DUMMY_REL: usize = 0x06C0;
@@ -128,7 +125,16 @@ const INTR_ED_JOY_REL: usize = 0x0A00;
 const INTR_TD_JOY_REL: usize = 0x0A20;
 const INTR_TD_JOY_DUMMY_REL: usize = 0x0A40;
 const JOY_BUF_REL: usize = 0x0A60;
-const OHCI_PAGE_SPAN: u32 = 0x0B00;
+// Ping-pong 2x4-TD hardware FIFO for USB HID Boot Mouse so 125 Hz wireless
+// dongles capture up to 4 consecutive 8 ms packets in hardware between 35 Hz
+// game polls (DOOM) or 18.2 Hz timer ticks without wrapping or dropping deltas.
+const MOUSE_BANK_TDS: usize = 4;
+const INTR_TD_MOUSE_DUMMY_REL: usize = 0x0B00;
+const INTR_TD_MOUSE_BANK_A_REL: usize = 0x0B20; // 4 x 16B = 0x40B (0x0B20..0x0B5F)
+const INTR_TD_MOUSE_BANK_B_REL: usize = 0x0B60; // 4 x 16B = 0x40B (0x0B60..0x0B9F)
+const MOUSE_BUF_BANK_A_REL: usize = 0x0BA0;     // 4 x 16B = 0x40B (0x0BA0..0x0BDF)
+const MOUSE_BUF_BANK_B_REL: usize = 0x0BE0;     // 4 x 16B = 0x40B (0x0BE0..0x0C1F)
+const OHCI_PAGE_SPAN: u32 = 0x0C20;
 
 // Configurable `usbdelay` multiplier bounds (default 1, clamped 1..=20) for slow USB flash drives.
 pub const USBDELAY_MIN: u32 = 1;
@@ -1033,6 +1039,8 @@ struct OhciState {
     // two contexts never truly run in parallel, they only nest.
     poll_active: bool,
     mouse: UsbHidEndpoint,
+    mouse_td_alt: bool,
+    mouse_td_idx: u8,
     mouse_wheel_dz: i32,
     kbd: UsbHidEndpoint,
     joy: UsbHidEndpoint,
@@ -1054,6 +1062,8 @@ impl OhciState {
             hid_active: false,
             poll_active: false,
             mouse: UsbHidEndpoint::ZERO,
+            mouse_td_alt: false,
+            mouse_td_idx: 0,
             mouse_wheel_dz: 0,
             kbd: UsbHidEndpoint::ZERO,
             joy: UsbHidEndpoint::ZERO,
@@ -1922,31 +1932,47 @@ pub unsafe extern "C" fn gate1_usb_init(dma_seg: u32, dst_lin: u32) -> u32 {
         unsafe {
             let _ = ohci_control_xfer(base, dma_lin, dma_phys, m.addr, m.low_speed, m.max_pkt0, &setup_boot, None);
             let _ = ohci_control_xfer(base, dma_lin, dma_phys, m.addr, m.low_speed, m.max_pkt0, &setup_idle, None);
-            let td_phys = dma_phys + INTR_TD_MOUSE_REL as u32;
             let dummy_phys = dma_phys + INTR_TD_MOUSE_DUMMY_REL as u32;
-            let buf_phys = dma_phys + MOUSE_BUF_REL as u32;
             dma_w32(dma_lin, INTR_TD_MOUSE_DUMMY_REL, 0);
             dma_w32(dma_lin, INTR_TD_MOUSE_DUMMY_REL + 4, 0);
             dma_w32(dma_lin, INTR_TD_MOUSE_DUMMY_REL + 8, 0);
             dma_w32(dma_lin, INTR_TD_MOUSE_DUMMY_REL + 12, 0);
-            dma_w32(
-                dma_lin,
-                INTR_TD_MOUSE_REL,
-                encode_ohci_td_flags(true, TD_PID_IN, TD_NO_INT, TD_TOGGLE_DATA0, TD_CC_NOT_ACCESSED),
-            );
-            dma_w32(dma_lin, INTR_TD_MOUSE_REL + 4, buf_phys);
-            dma_w32(dma_lin, INTR_TD_MOUSE_REL + 8, dummy_phys);
-            dma_w32(dma_lin, INTR_TD_MOUSE_REL + 12, buf_phys + (m.max_pkt as u32) - 1);
+            let mut i = 0usize;
+            while i < MOUSE_BANK_TDS {
+                let td_rel = INTR_TD_MOUSE_BANK_A_REL + i * 16;
+                let buf_rel = MOUSE_BUF_BANK_A_REL + i * 16;
+                let buf_phys = dma_phys + buf_rel as u32;
+                let next_phys = if i + 1 < MOUSE_BANK_TDS {
+                    dma_phys + (INTR_TD_MOUSE_BANK_A_REL + (i + 1) * 16) as u32
+                } else {
+                    dummy_phys
+                };
+                let toggle = if i == 0 { TD_TOGGLE_DATA0 } else { TD_TOGGLE_CARRY };
+                dma_w32(dma_lin, buf_rel, 0);
+                dma_w32(dma_lin, buf_rel + 4, 0);
+                dma_w32(
+                    dma_lin,
+                    td_rel,
+                    encode_ohci_td_flags(true, TD_PID_IN, 0, toggle, TD_CC_NOT_ACCESSED),
+                );
+                dma_w32(dma_lin, td_rel + 4, buf_phys);
+                dma_w32(dma_lin, td_rel + 8, next_phys);
+                dma_w32(dma_lin, td_rel + 12, buf_phys + (m.max_pkt as u32) - 1);
+                i += 1;
+            }
+            let td0_phys = dma_phys + INTR_TD_MOUSE_BANK_A_REL as u32;
             dma_w32(
                 dma_lin,
                 INTR_ED_MOUSE_REL,
                 encode_ohci_ed_flags(m.addr, m.ep, m.low_speed, false, m.max_pkt),
             );
             dma_w32(dma_lin, INTR_ED_MOUSE_REL + 4, dummy_phys);
-            dma_w32(dma_lin, INTR_ED_MOUSE_REL + 8, td_phys);
+            dma_w32(dma_lin, INTR_ED_MOUSE_REL + 8, td0_phys);
             dma_w32(dma_lin, INTR_ED_MOUSE_REL + 12, head_intr_ed_phys);
             head_intr_ed_phys = dma_phys + INTR_ED_MOUSE_REL as u32;
         }
+        st.mouse_td_alt = false;
+        st.mouse_td_idx = 0;
     }
 
     if st.joy.active {
@@ -2051,15 +2077,45 @@ pub unsafe extern "C" fn gate1_usb_poll() {
     let dma_lin = st.dma_lin + st.base_off as u32;
     let dma_phys = st.dma_phys + st.base_off as u32;
 
-    // 1. Poll USB HID Boot Mouse TD.
+    // Drain OHCI WritebackDoneHead (WDH, bit 1) per OHCI 1.0a §5.2.9 so the
+    // controller flushes HcDoneHead into HCCA (+0x84) every frame instead of
+    // accumulating a cyclic TD chain when periodic TDs are reused.
+    unsafe {
+        if (mmio_r32(st.mapped_lin, HC_INTERRUPT_STATUS) & 0x0000_0002) != 0 {
+            dma_w32(dma_lin, 0x84, 0);
+            mmio_w32(st.mapped_lin, HC_INTERRUPT_STATUS, 0x0000_0002);
+        }
+    }
+
+    // 1. Poll USB HID Boot Mouse 2x4-TD hardware FIFO (ping-pong between
+    //    Bank A and Bank B so OHCI captures up to 4 consecutive 8 ms packets
+    //    between polls and we never overwrite a TD still on HcDoneHead).
     if st.mouse.active {
-        let td_flags = unsafe { dma_r32(dma_lin, INTR_TD_MOUSE_REL) };
-        let cc = (td_flags >> 28) & 0x0F;
-        if cc != TD_CC_NOT_ACCESSED {
-            let buf_phys = dma_phys + MOUSE_BUF_REL as u32;
-            let td_cbp = unsafe { dma_r32(dma_lin, INTR_TD_MOUSE_REL + 4) };
-            // OHCI sets CBP=0 when the full buffer was transferred, or CBP > buf_phys
-            // on a short packet; CBP == buf_phys means 0 bytes were transferred.
+        let (td_base_rel, buf_base_rel) = if st.mouse_td_alt {
+            (INTR_TD_MOUSE_BANK_B_REL, MOUSE_BUF_BANK_B_REL)
+        } else {
+            (INTR_TD_MOUSE_BANK_A_REL, MOUSE_BUF_BANK_A_REL)
+        };
+        let dummy_phys = dma_phys + INTR_TD_MOUSE_DUMMY_REL as u32;
+        let headp = unsafe { dma_r32(dma_lin, INTR_ED_MOUSE_REL + 8) };
+        let head_addr = headp & !0x0F;
+        let halted = (headp & 1) != 0;
+
+        while (st.mouse_td_idx as usize) < MOUSE_BANK_TDS {
+            let idx = st.mouse_td_idx as usize;
+            let cur_td_rel = td_base_rel + idx * 16;
+            let cur_td_phys = dma_phys + cur_td_rel as u32;
+            if !halted && head_addr == cur_td_phys {
+                break;
+            }
+            let td_flags = unsafe { dma_r32(dma_lin, cur_td_rel) };
+            let cc = (td_flags >> 28) & 0x0F;
+            if cc == TD_CC_NOT_ACCESSED {
+                break;
+            }
+            let cur_buf_rel = buf_base_rel + idx * 16;
+            let buf_phys = dma_phys + cur_buf_rel as u32;
+            let td_cbp = unsafe { dma_r32(dma_lin, cur_td_rel + 4) };
             if cc == TD_CC_NO_ERROR && td_cbp != buf_phys {
                 let xferred = if td_cbp == 0 {
                     st.mouse.max_pkt as usize
@@ -2068,7 +2124,7 @@ pub unsafe extern "C" fn gate1_usb_poll() {
                 }
                 .min(st.mouse.max_pkt as usize)
                 .min(16);
-                let ptr = (dma_lin as usize + MOUSE_BUF_REL) as *const u8;
+                let ptr = (dma_lin as usize + cur_buf_rel) as *const u8;
                 let mut raw = [0u8; 16];
                 let mut i = 0usize;
                 while i < xferred {
@@ -2085,23 +2141,49 @@ pub unsafe extern "C" fn gate1_usb_poll() {
                     mouse_feed_usb(dx, dy, buttons);
                 }
             }
-            // Re-arm mouse Interrupt IN TD (zero report buffer first, preserve DataToggle carry bit).
-            let td_phys = dma_phys + INTR_TD_MOUSE_REL as u32;
-            let dummy_phys = dma_phys + INTR_TD_MOUSE_DUMMY_REL as u32;
+            st.mouse_td_idx += 1;
+            if halted {
+                break;
+            }
+        }
+
+        // Once the active 4-TD bank is fully retired (or halted), flip to the
+        // idle bank and arm all 4 TDs cleanly, preserving DataToggle carry bit.
+        if head_addr == dummy_phys || halted {
+            st.mouse_td_alt = !st.mouse_td_alt;
+            st.mouse_td_idx = 0;
+            let (next_td_base, next_buf_base) = if st.mouse_td_alt {
+                (INTR_TD_MOUSE_BANK_B_REL, MOUSE_BUF_BANK_B_REL)
+            } else {
+                (INTR_TD_MOUSE_BANK_A_REL, MOUSE_BUF_BANK_A_REL)
+            };
+            let toggle_carry = headp & 0x02;
             unsafe {
-                dma_w32(dma_lin, MOUSE_BUF_REL, 0);
-                let headp = dma_r32(dma_lin, INTR_ED_MOUSE_REL + 8);
-                let toggle_carry = headp & 0x02;
-                dma_w32(
-                    dma_lin,
-                    INTR_TD_MOUSE_REL,
-                    encode_ohci_td_flags(true, TD_PID_IN, TD_NO_INT, TD_TOGGLE_CARRY, TD_CC_NOT_ACCESSED),
-                );
-                dma_w32(dma_lin, INTR_TD_MOUSE_REL + 4, buf_phys);
-                dma_w32(dma_lin, INTR_TD_MOUSE_REL + 8, dummy_phys);
-                dma_w32(dma_lin, INTR_TD_MOUSE_REL + 12, buf_phys + (st.mouse.max_pkt as u32) - 1);
+                let mut i = 0usize;
+                while i < MOUSE_BANK_TDS {
+                    let td_rel = next_td_base + i * 16;
+                    let buf_rel = next_buf_base + i * 16;
+                    let buf_phys = dma_phys + buf_rel as u32;
+                    let next_phys = if i + 1 < MOUSE_BANK_TDS {
+                        dma_phys + (next_td_base + (i + 1) * 16) as u32
+                    } else {
+                        dummy_phys
+                    };
+                    dma_w32(dma_lin, buf_rel, 0);
+                    dma_w32(dma_lin, buf_rel + 4, 0);
+                    dma_w32(
+                        dma_lin,
+                        td_rel,
+                        encode_ohci_td_flags(true, TD_PID_IN, 0, TD_TOGGLE_CARRY, TD_CC_NOT_ACCESSED),
+                    );
+                    dma_w32(dma_lin, td_rel + 4, buf_phys);
+                    dma_w32(dma_lin, td_rel + 8, next_phys);
+                    dma_w32(dma_lin, td_rel + 12, buf_phys + (st.mouse.max_pkt as u32) - 1);
+                    i += 1;
+                }
                 core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
-                dma_w32(dma_lin, INTR_ED_MOUSE_REL + 8, td_phys | toggle_carry);
+                let td0_phys = dma_phys + next_td_base as u32;
+                dma_w32(dma_lin, INTR_ED_MOUSE_REL + 8, td0_phys | toggle_carry);
             }
         }
     }
