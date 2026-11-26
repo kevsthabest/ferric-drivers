@@ -43,6 +43,7 @@ CLIENT_ESI              equ 4
 CLIENT_DS               equ 64
 PKT_BRIDGE_VECTOR       equ 0xF1        ; stub -> JLM bridge interrupt
 MOUSE_BRIDGE_VECTOR     equ 0xF2        ; DPMI 0300h INT 33h -> JLM bridge interrupt
+MOUSE_IRQ_BRIDGE_VECTOR equ 0xF3        ; IVT[0x74] (IRQ 12) -> JLM bridge interrupt
 PKT_INT_VECTOR          equ 0x60        ; packet-driver vector (stub lives here)
 NET_DMA_PARAS           equ 1024        ; 16 KiB packet-driver DMA block
 DDB_STRUCT_SIZE         equ 80          ; sizeof(VxD_Desc_Block) in JLM.INC
@@ -181,6 +182,8 @@ mouse_irq_installed:
 mouse_ivt_patched:
     dd 0
 mouse_old_ivt33:
+    dd 0
+mouse_old_ivt74:
     dd 0
 _mouse_bridge_oldvec:
     dd 0
@@ -1980,29 +1983,29 @@ _pkt_hookproc:
     dd _mouse_irq_oldvec
 _mouse_irq_hookproc:
     pushad
+    mov ecx, 12                 ; drain up to 4 complete 3-byte aux packets per IRQ 12
+.drain_lp:
     in al, 0x64
-    test al, 0x01
-    jz .chain                   ; nothing waiting
-    test al, 0x20
-    jz .chain                   ; keyboard data, not auxiliary
+    and al, 0x21
+    cmp al, 0x21
+    jne .eoi_claim              ; nothing waiting, or keyboard data (not aux)
     in al, 0x60
     movzx eax, al
+    push ecx
     push eax
     call gate1_mouse_feed
     add esp, 4
+    pop ecx
+    dec ecx
+    jnz .drain_lp
+.eoi_claim:
+    ; Send non-specific EOI to slave PIC (IRQ 12 = slave IRQ 4) and master PIC,
+    ; then claim private INT 0xF3 bridge (CF=0) so the real-mode stub executes IRET.
+    mov al, 0x20
+    out 0xA0, al
+    out 0x20, al
     popad
-    ; Chain even though the byte is consumed. Claiming (CF clear) was
-    ; tried first and starved the line: with a claim, Jemm's monitor
-    ; leaves the slave PIC's in-service bit set, no second IRQ 12 is
-    ; ever delivered, and the assembler stalls mid-packet (proven by
-    ; the 0021h diagnostic: idx stuck at 1, next byte waiting in the
-    ; 8042). The handlers behind us are EOI stubs that never read the
-    ; data port, so chaining after consuming is both safe and required.
-    stc
-    ret
-.chain:
-    popad
-    stc
+    clc
     ret
 
 ; Helper: if a mouse INT 33h AX=000Ch callback is registered and events are
@@ -2156,9 +2159,18 @@ DllMain:
     pop eax
     or eax, eax
     jz .attach_done
-    mov eax, MOUSE_IRQ_VECTOR
+    ; Route IVT[0x74] (IRQ 12) through a 3-byte real-mode stub at BDA IACA
+    ; 0040:00F5 (`INT 0xF3; IRET` = CD F3 CF) so BOTH V86 IRQ 12 AND PM32
+    ; HDPMI32i-reflected IRQ 12 (which jumps directly to IVT[0x74], bypassing
+    ; JEMM's V86 INT 74h chain hook!) always enter _mouse_irq_hookproc.
+    mov eax, MOUSE_IRQ_BRIDGE_VECTOR
     mov esi, _mouse_irq_hookproc
     VMMCall VMM_HOOK_V86_INT_CHAIN
+    mov eax, [0x000001D0]               ; save original IVT[0x74]
+    mov [mouse_old_ivt74], eax
+    mov word [0x000004F5], 0xF3CD       ; INT 0xF3 (CD F3) at 0040:00F5
+    mov byte [0x000004F7], 0xCF         ; IRET (CF) at 0040:00F7
+    mov dword [0x000001D0], 0x004000F5  ; IVT[0x74] = 0040:00F5
     mov dword [mouse_irq_installed], 1
 .attach_done:
     mov eax, 1                              ; success -> keep JLM resident
@@ -2228,7 +2240,9 @@ DllMain:
 .detach_mouse:
     cmp dword [mouse_irq_installed], 0
     je .detach_int33
-    mov eax, MOUSE_IRQ_VECTOR
+    mov eax, [mouse_old_ivt74]
+    mov [0x000001D0], eax
+    mov eax, MOUSE_IRQ_BRIDGE_VECTOR
     mov esi, _mouse_irq_hookproc
     VMMCall VMM_UNHOOK_V86_INT_CHAIN
     mov dword [mouse_irq_installed], 0

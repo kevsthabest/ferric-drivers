@@ -123,21 +123,21 @@ def main() -> int:
 
             def rel(dx, dy):
                 return [
-                    {"type": "rel", "data": {"axis": "rel_x", "value": dx}},
-                    {"type": "rel", "data": {"axis": "rel_y", "value": dy}},
+                    {"type": "rel", "data": {"axis": "x", "value": dx}},
+                    {"type": "rel", "data": {"axis": "y", "value": dy}},
                 ]
 
             def btn(down):
                 return [{"type": "btn", "data": {"button": "left", "down": down}}]
 
             time.sleep(1.0)
-            send(rel(300, 120))
+            send(rel(40, 20))
             time.sleep(2.0)
             send(btn(True))
             time.sleep(2.0)
             send(btn(False))
             time.sleep(2.0)
-            send(rel(-150, -60))
+            send(rel(-16, -8))
 
             if not wait_for(log, "MTEST: DONE", 60.0):
                 print("[gate2-mouse] FAIL: MTEST never finished")

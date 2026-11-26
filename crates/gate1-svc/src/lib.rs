@@ -2079,6 +2079,8 @@ pub struct MouseState {
     present: bool,
     packet: [u8; 3],
     packet_idx: u8,
+    #[allow(dead_code)]
+    last_byte_tick: u32,
     dropped_bytes: u32,
     packets: u32,
     x: i32,
@@ -2139,6 +2141,7 @@ impl MouseState {
             present: false,
             packet: [0; 3],
             packet_idx: 0,
+            last_byte_tick: 0,
             dropped_bytes: 0,
             packets: 0,
             x: 320,
@@ -2705,6 +2708,18 @@ pub unsafe extern "C" fn gate1_mouse_feed(byte: u32) -> u32 {
         st.byte_log[st.byte_log_len as usize] = b;
         st.byte_log_len += 1;
     }
+    // If a partial 3-byte packet stalled for >110 ms (>2 BDA ticks at 18.2 Hz),
+    // resync to byte 0 so lifting/re-touching a touchpad never misaligns the next
+    // packet into phantom clicks or cursor teleports.
+    #[cfg(target_arch = "x86")]
+    {
+        let now_tick = unsafe { core::ptr::read_volatile(0x046C as *const u32) };
+        if st.packet_idx != 0 && now_tick.wrapping_sub(st.last_byte_tick) > 2 {
+            st.dropped_bytes += st.packet_idx as u32;
+            st.packet_idx = 0;
+        }
+        st.last_byte_tick = now_tick;
+    }
     // Byte 0 of a packet always has bit 3 set; anything else while we
     // expect a first byte is a dropped/resynced byte (hot-plug noise,
     // a byte the keyboard path left behind, a lost IRQ).
@@ -2721,8 +2736,6 @@ pub unsafe extern "C" fn gate1_mouse_feed(byte: u32) -> u32 {
     if st.disabled {
         return 0;
     }
-    st.packets += 1;
-
     let b0 = st.packet[0];
     let mut dx = st.packet[1] as i32;
     if b0 & 0x10 != 0 {
@@ -2732,15 +2745,30 @@ pub unsafe extern "C" fn gate1_mouse_feed(byte: u32) -> u32 {
     if b0 & 0x20 != 0 {
         dy -= 256;
     }
-    // Overflow on an axis means the count is meaningless; real mice
-    // set it when shaken faster than the counter range. Zero the axis
-    // rather than applying a wrapped delta.
-    if b0 & 0x40 != 0 {
-        dx = 0;
+    // Desync guard: if a byte was dropped in the 8042 1-byte buffer (e.g. during
+    // a PM32 audio IRQ), a movement byte with bit 3 set can be misread as b0,
+    // producing impossible sign/magnitude mismatches (e.g. b0_sign=0 with b1=0xFF
+    // -> dx=+255, or a real b0=0x38 landing in b2 -> dy=-200) and phantom button
+    // bits (btn=4/5/6/7). Reject such packets and slide the 3-byte window forward
+    // to re-lock onto the real b0 byte without teleporting or clicking.
+    let overflow = (b0 & 0xC0) != 0;
+    if overflow || dx < -96 || dx > 96 || dy < -96 || dy > 96 {
+        st.dropped_bytes += 1;
+        let p1 = st.packet[1];
+        let p2 = st.packet[2];
+        if (p1 & 0x08) != 0 && (p1 & 0xC0) == 0 {
+            st.packet[0] = p1;
+            st.packet[1] = p2;
+            st.packet_idx = 2;
+        } else if (p2 & 0x08) != 0 && (p2 & 0xC0) == 0 {
+            st.packet[0] = p2;
+            st.packet_idx = 1;
+        } else {
+            st.packet_idx = 0;
+        }
+        return 0;
     }
-    if b0 & 0x80 != 0 {
-        dy = 0;
-    }
+    st.packets += 1;
     // PS/2 +Y points at the top of the screen; DOS Y grows downward.
     let move_y = -dy;
     st.mickey_x += dx;
