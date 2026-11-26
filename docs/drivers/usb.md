@@ -19,9 +19,11 @@ The OHCI core is a derivative of **USBDDOS** and is
 Host-controller driver, root hub and external-hub enumeration, and
 two device classes:
 
-- **HID** — keyboards and mice; the USB mouse feeds the core's
-  INT 33h mouse, including the scroll wheel (verb `0x001C` reads
-  and clears the accumulated wheel delta).
+- **HID** — keyboards and mice; the USB mouse uses a ping-pong
+  2×4-TD hardware FIFO with OHCI `WritebackDoneHead` draining so
+  125 Hz wireless mice stay stall-free and capture full motion
+  between 35 Hz game polls, feeding the core's `INT 33h` mouse
+  (verb `0x001C` reads and clears the accumulated scroll-wheel delta).
 - **Mass storage** — Bulk-Only Transport / SCSI. Its sector
   functions (`gate1_blk_*`) are the core's block-service table,
   which is what the filesystem modules read and write through.

@@ -21,10 +21,19 @@ to be built first.
 | `sh crates/ferric-ntfs/build.sh` | `out/NTFS.JLM` |
 | `sh crates/ferric-vbe/build.sh` | `out/VBE.JLM` |
 | `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
+| `drivers/vsbhda/build.sh` | `ALI5451.DRV` / `ALIDET.DRV` — 32-bit external ALi M5451 backend for upstream VSBHDA v2.1 (see [`drivers/vsbhda/README.md`](../drivers/vsbhda/README.md) for the two external source checkouts required) |
 
 Three crates have no build script of their own — `abi`, `wifi-core`,
 and `ferric-ehci` are libraries, and they compile in as dependencies
 of the builds above.
+
+## Loading and using the built modules on DOS
+
+1. Boot FreeDOS with `DEVICE=JEMMEX.EXE NOEMS D=64` (and `DEVICE=USBDRV.SYS` if using USB mass-storage drive letters).
+2. Load the resident core first: `JLOAD.EXE FERRIC.JLM`.
+3. Load any optional satellite modules (`JLOAD.EXE EXFAT.JLM`, `JLOAD.EXE NTFS.JLM`, `JLOAD.EXE VBE.JLM`).
+4. For 32-bit DPMI games/apps and VSBHDA audio: load `JLOAD.EXE QPIEMU.DLL`, `LH HDPMI32I.EXE -r`, set `BLASTER=A220 I5 D1 H5 T6 P330`, and run `VSBHDA.EXE /DF:ALIDET.DRV /B2 /PS2048 /F48000 /OPL1 /SF:C:\SF2\MT32.SF2`.
+5. Run the `.COM` clients as needed: `NETINIT.COM` (Ethernet), `WCONN.COM` (Wi-Fi), `USBPROBE.COM` (USB HID/MSC), `MIXER.COM` (AC'97 + SB mixer), `PWRCTL.COM` (M7101 PMU), `VBECTL.COM` (VBE 2D).
 
 ## Toolchain
 

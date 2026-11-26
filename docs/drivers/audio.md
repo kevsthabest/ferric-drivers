@@ -32,8 +32,10 @@ the hardware evidence in the
   that stages banks in XMS memory. Verbs `0x0040`–`0x0044`
   (begin load, copy, parse/activate, unload, status).
 
-Clients (in `crates/cbprobe`): **AUDPROBE.COM**, **MIXER.COM**,
-**SF2LOAD.COM**.
+Clients (in `crates/cbprobe`): **AUDPROBE.COM**, **MIXER.COM**
+(controls AC'97 Speaker via verb `0x002A` and syncs live Sound
+Blaster Master/Voice/FM levels over ports `0x224`/`0x225` so it
+works under both VSBHDA and `AUDPROBE /SB`), **SF2LOAD.COM**.
 
 ## Provenance
 

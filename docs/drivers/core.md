@@ -37,7 +37,15 @@ core, because they share its interrupt, DMA, and client plumbing.
 - **Shared machine plumbing.** A shared IRQ 11 chain (Ethernet,
   OHCI, VGA, and audio all hang off it on the development machine),
   VDMAD-validated DMA buffers below 1 MiB, and the INT 08h/INT 1Ch
-  polling hooks the USB and Wi-Fi receive paths run from.
+  polling hooks used by USB and Wi-Fi fallback polling.
+- **Resident PS/2 + USB `INT 33h` mouse driver.** Serves both the
+  built-in PS/2 mouse/touchpad (with `IVT[0x74]` routed through a
+  `0040:00F5` `INT 0xF3; IRET` bridge so PM32 DPMI reflections never
+  bypass the hook, plus a sliding-window desync resync) and OHCI USB
+  HID mice behind one `INT 33h` API. Exposes a `0040:00F0`
+  (`INT 0xF2; IRET`) bridge so 32-bit DPMI clients (DOOM, Dillo)
+  under `HDPMI32I` receive both polling (`0003h`/`000Bh`) and async
+  callbacks (`000Ch`).
 
 ## Hosted drivers
 

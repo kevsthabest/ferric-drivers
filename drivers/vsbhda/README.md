@@ -33,10 +33,20 @@ Ferric's own sound emulation automatically.
 
 ```bat
 CD \VSB
+C:\JLOAD.EXE FERRIC.JLM
 C:\JLOAD.EXE QPIEMU.DLL
-SET BLASTER=A220 I5 D1 T4
-VSBHDA /DF:ALI5451.DRV /B2 /PS1024 /OPL1
+LH HDPMI32I.EXE -r
+SET BLASTER=A220 I5 D1 H5 T6 P330
+VSBHDA /DF:ALIDET.DRV /B2 /PS2048 /F48000 /OPL1 /SF:C:\SF2\MT32.SF2
 ```
+
+For Sound Blaster Pro (`T4`) / 22 kHz fallback without a SoundFont, use:
+```bat
+SET BLASTER=A220 I5 D1 T4
+VSBHDA /DF:ALIDET.DRV /B2 /PS1024 /OPL1
+```
+
+`MIXER.COM` works live alongside VSBHDA (controlling the ALi M5451 AC'97 hardware volume via `FERRIC.JLM` verb `0x002A` and VSBHDA's SB Master / Voice / FM mixer via ports `0x224`/`0x225`).
 
 On a fresh boot, launch VSBHDA directly. Running VSBPREP first makes the
 DynaBook answer the upstream DSP reset check and aborts installation.

@@ -42,8 +42,11 @@ WPA2 supplicant, and no DOS implementation of any of that existed.
   diagnostics), **WSCAN.COM** (beacon scan), **WCONN.COM**
   (connect; also installs the `INT 60h` TSR for the Wi-Fi backend).
 
-Receive is polled from the core's timer hook; there is no dedicated
-Wi-Fi IRQ handler.
+Receive is driven by AR2413 hardware `AR5K_INT_RXOK` interrupts on
+shared PCI IRQ 11 (with the core's `INT 1Ch` timer hook kept as an
+idle safety net), and data frames use a 4-stage hardware Multi-Rate
+Retry ladder (`36M -> 18M -> 6M -> 1M`, with management/EAPOL frames
+held at 1M CCK), achieving 212–265 KB/s FTP upload on the DynaBook.
 
 ## Provenance
 
