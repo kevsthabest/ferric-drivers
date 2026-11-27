@@ -67,6 +67,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - CI checkpoint `3e9acda`: host tests and seven JLM target builds passed.
 - I.2: Ethernet probe identity and IRQ are independent of Wi-Fi state; validate BAR and IRQ before port access, defer enabling PCI bus mastering until DMA is locked, and disable it on failed bring-up. Physical validation pending.
 
+- I.2: extracted controller initialization, configuration and RX ring programming into the reusable DeviceIo layer with mock DMA/SCB tests. IRQ installation, PCI ownership, DMA locks and teardown remain platform responsibilities.
+
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.

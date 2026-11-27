@@ -3398,10 +3398,10 @@ unsafe fn pci_write32(bus: u8, dev: u8, func: u8, off: u8, val: u32) {
 
 pub use ferric_i8255x::dma::{NET_DMA_SIZE, NET_DMA_PARAS};
 use ferric_i8255x::dma::{
-    DmaRegion, receive_descriptor, transmit_descriptor,
-    RFD_COUNT, RFD_STRIDE, RFD_HDR, FRAME_BUF, TXCB_OFF, TXBUF_OFF, STATS_OFF,
-    RFD_STATUS, RFD_CMD, RFD_LINK, RFD_RBD, RFD_ACTUAL, RFD_SIZE,
-    CB_STATUS, CB_CMD, CB_LINK, CB_PARAM, CB_TBD_ADDR, CB_THRESH, CB_TBD_COUNT, TBD_ADDR, TBD_LEN,
+    DmaRegion, transmit_descriptor,
+    RFD_COUNT, RFD_STRIDE, RFD_HDR, FRAME_BUF, TXCB_OFF, TXBUF_OFF, 
+    RFD_STATUS, RFD_CMD, RFD_ACTUAL, RFD_SIZE,
+    CB_STATUS, CB_CMD, CB_LINK, CB_TBD_ADDR, CB_THRESH, CB_TBD_COUNT, TBD_ADDR, TBD_LEN,
 };
 
 // SCB register offsets from the I/O base (BAR1).
@@ -3683,31 +3683,28 @@ impl ferric_i8255x::scb::ScbIo for NetScbIo {
 
 const SCB_POLL_LIMIT: u32 = 1_000_000;
 
-unsafe fn scb_wait_cmd(io: u16) -> bool {
-    ferric_i8255x::scb::wait_idle(&mut NetScbIo(io), 2, SCB_POLL_LIMIT)
-}
-
-/// Issue a command only if the previous command has been accepted.
 unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) -> Result<(), ferric_i8255x::scb::CommandError> {
     ferric_i8255x::scb::submit(&mut NetScbIo(io), gp, cmd, 2, SCB_POLL_LIMIT)
 }
 
-/// Run the command block built at TXCB_OFF to completion (polled).
-/// Callers zero and fill the block first; EL is always set on it.
-unsafe fn cu_exec(st: &mut NetState) -> bool {
-    let io = st.ethernet.io_base;
-    let lin = st.ethernet.dma_lin;
-    if unsafe { scb_cmd(io, st.ethernet.dma_phys + TXCB_OFF as u32, 0x10) }.is_err() { return false; }
-    let start = bios_tick();
-    for _ in 0..SCB_POLL_LIMIT {
-        if dma_r16(lin, TXCB_OFF + CB_STATUS) & 0x8000 != 0 {
-            return true;
-        }
-        if bios_tick().wrapping_sub(start) > 36 {
-            return false;
-        }
-    }
-    false
+use ferric_i8255x::scb::ScbIo;
+struct NetDeviceIo { port: NetScbIo, lin: u32 }
+impl ferric_i8255x::scb::ScbIo for NetDeviceIo {
+    fn command(&mut self) -> u8 { self.port.command() }
+    fn set_pointer(&mut self, p: u32) { self.port.set_pointer(p); }
+    fn set_command(&mut self, cmd: u8) { self.port.set_command(cmd); }
+    fn tick(&mut self) -> u32 { self.port.tick() }
+}
+impl ferric_i8255x::device::DeviceIo for NetDeviceIo {
+    fn reset(&mut self) { unsafe { outl(self.port.0 + SCB_PORT, 0) }; }
+    fn mask_device_irq(&mut self) { unsafe { outb(self.port.0 + SCB_CMDHI, 1) }; }
+    fn read_dma16(&mut self, off: usize) -> u16 { dma_r16(self.lin, off) }
+    fn write_dma8(&mut self, off: usize, v: u8) { dma_w8(self.lin, off, v); }
+    fn write_dma16(&mut self, off: usize, v: u16) { dma_w16(self.lin, off, v); }
+    fn write_dma32(&mut self, off: usize, v: u32) { dma_w32(self.lin, off, v); }
+}
+fn net_device_io(st: &NetState) -> NetDeviceIo {
+    NetDeviceIo { port: NetScbIo(st.ethernet.io_base), lin: st.ethernet.dma_lin }
 }
 
 unsafe fn zero_cb(st: &NetState) {
@@ -3717,15 +3714,8 @@ unsafe fn zero_cb(st: &NetState) {
 }
 
 unsafe fn net_configure(st: &mut NetState, promisc: bool) -> bool {
-    let cfg = ferric_i8255x::configure_bytes(promisc);
-    unsafe {
-        zero_cb(st);
-        dma_w16(st.ethernet.dma_lin, TXCB_OFF + CB_CMD, 0x8002); // Configure | EL
-        for (i, b) in cfg.iter().enumerate() {
-            dma_w8(st.ethernet.dma_lin, TXCB_OFF + CB_PARAM + i, *b);
-        }
-        cu_exec(st)
-    }
+    let Some(region) = DmaRegion::new(st.ethernet.dma_phys, st.ethernet.dma_lin) else { return false; };
+    ferric_i8255x::device::configure(&mut net_device_io(st), region, promisc)
 }
 
 // Hardware adapters for the shared 8255x serial protocols.
@@ -3851,24 +3841,12 @@ unsafe fn net_init_failed(st: &mut NetState) -> u32 {
 /// Build the receive ring in the DMA block (shared by bring-up and
 /// the packet driver's reset_interface).
 unsafe fn net_ring_init(st: &mut NetState) {
-    let lin = st.ethernet.dma_lin;
-    let Some(region) = DmaRegion::new(st.ethernet.dma_phys, lin) else { return; };
-    for i in 0..RFD_COUNT {
-        let off = i * RFD_STRIDE;
-        let Some(desc) = receive_descriptor(region, i) else { return; };
-        dma_w16(lin, off + RFD_STATUS, 0);
-        dma_w16(lin, off + RFD_CMD, desc.command);
-        dma_w32(lin, off + RFD_LINK, desc.link);
-        dma_w32(lin, off + RFD_RBD, desc.buffer_descriptor);
-        dma_w16(lin, off + RFD_ACTUAL, 0);
-        dma_w16(lin, off + RFD_SIZE, desc.size);
+    let Some(region) = DmaRegion::new(st.ethernet.dma_phys, st.ethernet.dma_lin) else { return; };
+    let mut io = net_device_io(st);
+    if ferric_i8255x::device::initialize_ring(&mut io, &mut st.ethernet, region) {
+        st.svc_rfd = -1;
+        st.svc_phase = 0;
     }
-    st.ethernet.rx_clean = 0;
-    st.ethernet.rx_tail = RFD_COUNT - 1;
-    st.svc_rfd = -1;
-    st.svc_phase = 0;
-    st.ethernet.ru_restart = -1;
-    st.ethernet.ru_starved = false;
 }
 
 /// Full device bring-up against the DOS DMA block NETINIT allocated.
@@ -3901,45 +3879,12 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     let dev = st.ethernet.pci_device;
     let cmd = unsafe { pci_read32(0, dev, 0, 0x04) } as u16;
     unsafe { pci_write32(0, dev, 0, 0x04, u32::from(cmd | 5)) };
-    st.stage = 2;
-    for i in 0..NET_DMA_SIZE {
-        dma_w8(st.ethernet.dma_lin, i, 0);
-    }
-    unsafe {
-        // Software reset, then let the SCB settle.
-        outl(io + SCB_PORT, 0);
-        for _ in 0..4096 {
-            let _ = inb(io + SCB_CMD);
-        }
-        if !scb_wait_cmd(io) || scb_cmd(io, 0, 0x60).is_err() || scb_cmd(io, 0, 0x06).is_err() {
-            return net_init_failed(st);
-        }
-    }
-    if !unsafe { net_configure(st, false) } {
+    let mut device_io = net_device_io(st);
+    if ferric_i8255x::device::initialize(&mut device_io, &mut st.ethernet, &mut st.stage).is_err() {
         return unsafe { net_init_failed(st) };
     }
-    st.stage = 3;
-    unsafe {
-        zero_cb(st);
-        dma_w16(st.ethernet.dma_lin, TXCB_OFF + CB_CMD, 0x8001); // IA setup | EL
-        for i in 0..6 {
-            dma_w8(st.ethernet.dma_lin, TXCB_OFF + CB_PARAM + i, st.mac[i]);
-        }
-        if !cu_exec(st) {
-            return net_init_failed(st);
-        }
-    }
-    st.stage = 4;
-    unsafe {
-        // Statistics dump target (counters read on demand later).
-        if scb_cmd(io, st.ethernet.dma_phys + STATS_OFF as u32, 0x40).is_err() {
-            return net_init_failed(st);
-        }
-        net_ring_init(st);
-        if scb_cmd(io, st.ethernet.dma_phys, 0x01).is_err() {
-            return net_init_failed(st);
-        }
-    }
+    st.svc_rfd = -1;
+    st.svc_phase = 0;
     st.stage = 5;
     unsafe {
         // Clear any pending CX/CNA status bits left over from Configure / IA

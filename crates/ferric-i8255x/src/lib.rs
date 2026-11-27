@@ -7,6 +7,7 @@ pub mod dma;
 pub mod serial;
 pub mod scb;
 pub mod state;
+pub mod device;
 
 /// The 8255x Configure command (22 bytes, verified against Linux
 /// `e100.c` `e100_configure()` and the Intel 8255x OpenSDM):
