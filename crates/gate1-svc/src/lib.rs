@@ -3398,6 +3398,7 @@ unsafe fn pci_write32(bus: u8, dev: u8, func: u8, off: u8, val: u32) {
 
 pub use ferric_i8255x::dma::{NET_DMA_SIZE, NET_DMA_PARAS};
 use ferric_i8255x::dma::{
+    DmaRegion, receive_descriptor, transmit_descriptor,
     RFD_COUNT, RFD_STRIDE, RFD_HDR, FRAME_BUF, TXCB_OFF, TXBUF_OFF, STATS_OFF,
     RFD_STATUS, RFD_CMD, RFD_LINK, RFD_RBD, RFD_ACTUAL, RFD_SIZE,
     CB_STATUS, CB_CMD, CB_LINK, CB_PARAM, CB_TBD_ADDR, CB_THRESH, CB_TBD_COUNT, TBD_ADDR, TBD_LEN,
@@ -3844,22 +3845,16 @@ pub unsafe extern "C" fn gate1_net_stub_copy(dest: u32) -> u32 {
 /// the packet driver's reset_interface).
 unsafe fn net_ring_init(st: &mut NetState) {
     let lin = st.dma_lin;
+    let Some(region) = DmaRegion::new(st.dma_phys, lin) else { return; };
     for i in 0..RFD_COUNT {
         let off = i * RFD_STRIDE;
+        let Some(desc) = receive_descriptor(region, i) else { return; };
         dma_w16(lin, off + RFD_STATUS, 0);
-        dma_w16(
-            lin,
-            off + RFD_CMD,
-            if i == RFD_COUNT - 1 { 0x8000 } else { 0 },
-        );
-        dma_w32(
-            lin,
-            off + RFD_LINK,
-            st.dma_phys + (((i + 1) % RFD_COUNT) * RFD_STRIDE) as u32,
-        );
-        dma_w32(lin, off + RFD_RBD, 0xFFFF_FFFF);
+        dma_w16(lin, off + RFD_CMD, desc.command);
+        dma_w32(lin, off + RFD_LINK, desc.link);
+        dma_w32(lin, off + RFD_RBD, desc.buffer_descriptor);
         dma_w16(lin, off + RFD_ACTUAL, 0);
-        dma_w16(lin, off + RFD_SIZE, FRAME_BUF as u16);
+        dma_w16(lin, off + RFD_SIZE, desc.size);
     }
     st.rx_clean = 0;
     st.rx_tail = RFD_COUNT - 1;
@@ -3880,11 +3875,22 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
         return 0;
     }
     let io = st.io_base;
-    st.dma_lin = dma_seg << 4;
-    match unsafe { vdmad_lock_dma_region(st.dma_lin, NET_DMA_SIZE as u32) } {
-        Some(p) => st.dma_phys = p,
-        None => return 0,
+    if dma_seg == 0 || dma_seg > 0xFFFF || st.dma_lin != 0 {
+        return 0;
     }
+    let lin = dma_seg << 4;
+    if lin > 0x100000 - NET_DMA_SIZE as u32 {
+        return 0;
+    }
+    let Some(phys) = (unsafe { vdmad_lock_dma_region(lin, NET_DMA_SIZE as u32) }) else {
+        return 0;
+    };
+    if DmaRegion::new(phys, lin).is_none() {
+        unsafe { vdmad_unlock_dma_region(lin, NET_DMA_SIZE as u32) };
+        return 0;
+    }
+    st.dma_lin = lin;
+    st.dma_phys = phys;
     st.stage = 2;
     for i in 0..NET_DMA_SIZE {
         dma_w8(st.dma_lin, i, 0);
@@ -4279,7 +4285,9 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
         }
     }
     let lin = st.dma_lin;
-    let wire_len = if len < 60 { 60 } else { len };
+    let Some(region) = DmaRegion::new(st.dma_phys, lin) else { return false; };
+    let Some(desc) = transmit_descriptor(region, len) else { return false; };
+    let wire_len = usize::from(desc.wire_len);
     unsafe {
         core::ptr::copy_nonoverlapping(
             src_lin as *const u8,
@@ -4293,17 +4301,13 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
         // Flexible Mode (SF = 0x0008) is required on real 82550 silicon so
         // the CU reads CB_TBD_ADDR / CB_TBD_COUNT / TBD instead of treating
         // the block as Simplified Mode with a zero TCB byte count.
-        dma_w16(lin, TXCB_OFF + CB_CMD, 0x8000 | 0x2000 | 0x0008 | 0x0004); // EL | I | SF | Transmit
-        dma_w32(lin, TXCB_OFF + CB_LINK, st.dma_phys + TXCB_OFF as u32);
-        dma_w32(
-            lin,
-            TXCB_OFF + CB_TBD_ADDR,
-            st.dma_phys + TXCB_OFF as u32 + 16,
-        );
-        dma_w8(lin, TXCB_OFF + CB_THRESH, 0xE0);
+        dma_w16(lin, TXCB_OFF + CB_CMD, desc.command);
+        dma_w32(lin, TXCB_OFF + CB_LINK, desc.link);
+        dma_w32(lin, TXCB_OFF + CB_TBD_ADDR, desc.tbd);
+        dma_w8(lin, TXCB_OFF + CB_THRESH, desc.threshold);
         dma_w8(lin, TXCB_OFF + CB_TBD_COUNT, 1);
-        dma_w32(lin, TXCB_OFF + TBD_ADDR, st.dma_phys + TXBUF_OFF as u32);
-        dma_w32(lin, TXCB_OFF + TBD_LEN, wire_len as u32);
+        dma_w32(lin, TXCB_OFF + TBD_ADDR, desc.buffer);
+        dma_w32(lin, TXCB_OFF + TBD_LEN, u32::from(desc.wire_len));
     }
     st.tx_busy = true;
     st.tx_len = wire_len as u16;

@@ -79,3 +79,73 @@ mod tests {
         assert!(DmaRegion::new(0x10000, 0x20000).unwrap().physical_at(NET_DMA_SIZE).is_none());
     }
 }
+
+/// Device-visible descriptor values. Writes remain the adapter's responsibility.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReceiveDescriptor {
+    pub command: u16,
+    pub link: u32,
+    pub buffer_descriptor: u32,
+    pub size: u16,
+}
+
+pub fn receive_descriptor(region: DmaRegion, index: usize) -> Option<ReceiveDescriptor> {
+    Some(ReceiveDescriptor {
+        command: if index == RFD_COUNT - 1 { 0x8000 } else { 0 },
+        link: region.next_rfd(index)?,
+        buffer_descriptor: u32::MAX,
+        size: FRAME_BUF as u16,
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TransmitDescriptor {
+    pub command: u16,
+    pub link: u32,
+    pub tbd: u32,
+    pub buffer: u32,
+    pub wire_len: u16,
+    pub threshold: u8,
+}
+
+pub fn transmit_descriptor(region: DmaRegion, len: usize) -> Option<TransmitDescriptor> {
+    if !(1..=1514).contains(&len) { return None; }
+    Some(TransmitDescriptor {
+        command: 0xA00C,
+        link: region.physical_at(TXCB_OFF)?,
+        tbd: region.physical_at(TXCB_OFF + 16)?,
+        buffer: region.physical_at(TXBUF_OFF)?,
+        wire_len: len.max(60) as u16,
+        threshold: 0xE0,
+    })
+}
+
+#[cfg(test)]
+mod descriptor_tests {
+    use super::*;
+    #[test]
+    fn last_receive_descriptor_wraps_and_ends_list() {
+        let r = DmaRegion::new(0x10000, 0x20000).unwrap();
+        assert_eq!(receive_descriptor(r, 0).unwrap().command, 0);
+        let last = receive_descriptor(r, 7).unwrap();
+        assert_eq!(last.command, 0x8000);
+        assert_eq!(last.link, 0x10000);
+        assert_eq!(last.buffer_descriptor, u32::MAX);
+        assert_eq!(last.size, 1536);
+        assert_eq!(receive_descriptor(r, 8), None);
+    }
+    #[test]
+    fn tx_flexible_mode_and_padding() {
+        let r = DmaRegion::new(0x10000, 0x20000).unwrap();
+        let d = transmit_descriptor(r, 42).unwrap();
+        assert_eq!(d.command, 0xA00C);
+        assert_eq!(d.link, 0x10000 + 12416);
+        assert_eq!(d.tbd, d.link + 16);
+        assert_eq!(d.buffer, 0x10000 + 12448);
+        assert_eq!(d.wire_len, 60);
+        assert_eq!(d.threshold, 0xE0);
+        assert_eq!(transmit_descriptor(r, 1514).unwrap().wire_len, 1514);
+        assert_eq!(transmit_descriptor(r, 0), None);
+        assert_eq!(transmit_descriptor(r, 1515), None);
+    }
+}
