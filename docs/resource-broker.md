@@ -2,8 +2,9 @@
 
 DDB FD07; version 1.0. Stage I reserves this previously unused ID.
 Build with `sh crates/ferric-res/build.sh`; load via JLOAD before future
-clients. No dependency on FERRIC.JLM. This is not yet wired into PMU,
-SD or Ethernet; the existing module exclusion guard remains necessary.
+clients. No dependency on FERRIC.JLM. TOSHSD is the first client; PMU
+and Ethernet are not yet connected. The existing integrated-core exclusion
+guard remains necessary.
 
 Ring-0 service table, cdecl, u32 return values:
 

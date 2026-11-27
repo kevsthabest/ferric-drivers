@@ -97,6 +97,7 @@ const OPT_WIDTH_1: u16 = 1 << 15;
 
 struct ToshSdState {
     present: bool,
+    claimed: bool,
     bus: u8,
     dev: u8,
     func: u8,
@@ -117,9 +118,14 @@ struct ToshSdState {
 }
 
 impl ToshSdState {
+    fn bdf(&self) -> u32 {
+        (u32::from(self.bus) << 8) | (u32::from(self.dev) << 3) | u32::from(self.func)
+    }
+
     const fn new() -> Self {
         Self {
             present: false,
+            claimed: false,
             bus: 0,
             dev: 0,
             func: 0,
@@ -524,6 +530,15 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     let st = sd_state();
 
     if !st.present {
+        // A failed release must not be overwritten by another probe.
+        if st.claimed {
+            if unsafe { crate::sd_release_bdf(st.bdf()) } != 0 {
+                o.str("SD: previous PCI claim could not be released");
+                o.crlf();
+                return o.pos as u32;
+            }
+            st.claimed = false;
+        }
         let Some((bus, dev, func, did, rev, bar0)) = (unsafe { find_toshsd_pci() }) else {
             o.str("SD: Toshiba SD controller (1179:0805) not found on PCI bus 0");
             o.crlf();
@@ -542,6 +557,12 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
             return o.pos as u32;
         };
         st.bar_phys = bar;
+        if unsafe { crate::sd_claim_bdf(st.bdf()) } != 0 {
+            o.str("SD: PCI device ownership denied by FRES");
+            o.crlf();
+            return o.pos as u32;
+        }
+        st.claimed = true;
 
         // Wake PCI PMCSR (0x84) to D0 if in D3
         let pmcsr = unsafe { pci_read32(bus, dev, func, 0x84) };
@@ -571,6 +592,9 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
                     // PME status is W1C; do not echo it as a one.
                     pci_write32(bus, dev, func, 0x84, pmcsr & !0x8000);
                 }
+            }
+            if unsafe { crate::sd_release_bdf(st.bdf()) } == 0 {
+                st.claimed = false;
             }
             return o.pos as u32;
         };
@@ -837,8 +861,14 @@ pub extern "C" fn gate1_sd_shutdown() -> u32 {
                 pci_write32(st.bus, st.dev, st.func, 0x84, st.original_pmcsr & !0x8000);
             }
         }
-        *st = ToshSdState::new();
+        st.present = false;
+        st.mapped_lin = 0;
+        st.mapped_phys = 0;
     }
+    if st.claimed && unsafe { crate::sd_release_bdf(st.bdf()) } != 0 {
+        return 7;
+    }
+    *st = ToshSdState::new();
     0
 }
 

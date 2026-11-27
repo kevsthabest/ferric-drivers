@@ -18,6 +18,8 @@ DLL_PROCESS_DETACH      equ 0
 VMM_SIMULATE_FAR_RET    equ 13
 VMM_GET_DDB             equ 48
 FERRIC_CORE_DEVICE_ID   equ 0xFD01
+FRES_DEVICE_ID          equ 0xFD07
+FRES_VERSION            equ 0x00010000
 VMM_PAGE_FREE           equ 0x12
 VMM_PAGE_RESERVE        equ 0x27
 VMM_PAGE_COMMIT_PHYS    equ 0x2A
@@ -75,6 +77,36 @@ _ddb:
     dd 0
 
 section .text align=4
+
+; Registered client pins FRES until successful detach. These calls are
+; reachable only after attach; no cached DDB pointer survives unload.
+%macro FRESCall 1
+    int 0x20
+    dw %1
+    dw FRES_DEVICE_ID
+%endmacro
+
+global sd_claim_bdf
+sd_claim_bdf:
+    mov eax, [esp+4]
+    push dword 0
+    push eax
+    push dword 1
+    push dword SD_DEVICE_ID
+    FRESCall 3
+    add esp, 16
+    ret
+
+global sd_release_bdf
+sd_release_bdf:
+    mov eax, [esp+4]
+    push dword 0
+    push eax
+    push dword 1
+    push dword SD_DEVICE_ID
+    FRESCall 4
+    add esp, 16
+    ret
 
 global sd_map_mmio
 sd_map_mmio:
@@ -239,11 +271,38 @@ DllMain:
     pop edi
     test ecx, ecx
     jnz .attach_fail
+    ; Require the versioned resident broker before any hardware access.
+    push edi
+    mov eax, FRES_DEVICE_ID
+    xor edi, edi
+    VMMCall VMM_GET_DDB
+    pop edi
+    test ecx, ecx
+    jz .attach_fail
+    cmp dword [ecx+48], 0
+    je .attach_fail
+    cmp dword [ecx+52], 5
+    jb .attach_fail
+    FRESCall 0
+    cmp eax, FRES_VERSION
+    jne .attach_fail
+    push dword SD_DEVICE_ID
+    FRESCall 1
+    add esp, 4
+    test eax, eax
+    jnz .attach_fail
     jmp .ok
 .check_detach:
     cmp eax, DLL_PROCESS_DETACH
     jne .ok
     call gate1_sd_shutdown
+    test eax, eax
+    jnz .attach_fail
+    push dword SD_DEVICE_ID
+    FRESCall 2
+    add esp, 4
+    test eax, eax
+    jnz .attach_fail
 .ok:
     mov eax, 1
     ret 12

@@ -16,7 +16,7 @@ docker build -t ferric-drivers-build .
 docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-drivers.sh
 ```
 
-The script runs host unit tests for all ten workspace crates, builds six
+The script runs host unit tests for all twelve workspace crates, builds seven
 JLMs and their DOS clients using the existing per-module purity checks,
 and prints artifact hashes. Use `--host-only` for native unit tests only,
 or `sh scripts/build-drivers.sh` for target builds only. The external
@@ -38,18 +38,20 @@ to be built first.
 | `sh crates/ferric-ntfs/build.sh` | `out/NTFS.JLM` |
 | `sh crates/ferric-vbe/build.sh` | `out/VBE.JLM` |
 | `sh crates/ferric-pmu/build.sh` | `out/PMU.JLM` (standalone ALi M7101 PMU, `0xFD05` — no `FERRIC.JLM` required) |
-| `sh crates/ferric-sd/build.sh` | `out/TOSHSD.JLM` (standalone Toshiba TC6371AF SD slot, `0xFD06` — no `FERRIC.JLM` required) |
+| `sh crates/ferric-res/build.sh` | `out/FRES.JLM` (resident resource broker, `0xFD07`) |
+| `sh crates/ferric-sd/build.sh` | `out/TOSHSD.JLM` (standalone Toshiba TC6371AF SD slot, `0xFD06` — requires `FRES.JLM`, not `FERRIC.JLM`) |
 | `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
 | `drivers/vsbhda/build.sh` | `ALI5451.DRV` / `ALIDET.DRV` — 32-bit external ALi M5451 backend for upstream VSBHDA v2.1 (see [`drivers/vsbhda/README.md`](../drivers/vsbhda/README.md) for the two external source checkouts required) |
 
-Four crates have no build script of their own — `abi`, `wifi-core`,
-`ferric-hw`, and `ferric-ehci` are libraries, and they compile in as dependencies
+Five crates have no build script of their own — `abi`, `wifi-core`,
+`ferric-hw`, `ferric-i8255x`, and `ferric-ehci` are libraries, and they compile in as dependencies
 of the builds above.
 
 ## Loading and using the built modules on DOS
 
-For standalone PMU/SD, use only the respective module and its client;
-do not load it alongside FERRIC.JLM until ownership is coordinated.
+For standalone SD, load FRES.JLM first and unload it last. Standalone PMU
+still has no broker dependency. Do not load either driver alongside FERRIC.JLM
+until ownership is coordinated.
 The following is the integrated compatibility profile:
 
 1. Boot FreeDOS with `DEVICE=JEMMEX.EXE NOEMS D=64` (and `DEVICE=USBDRV.SYS` if using USB mass-storage drive letters).
@@ -92,7 +94,7 @@ modules follow the same shape):
    Watcom `wlink` into a PE32 DLL.
 6. PX-patch the DLL into the final `.JLM` file under `out/`.
 
-Outputs land in `out/` at the repository root (`FERRIC.JLM`,
+Outputs land in `out/` at the repository root (`FRES.JLM`, `FERRIC.JLM`,
 `EXFAT.JLM`, `NTFS.JLM`, `VBE.JLM`, `PMU.JLM`, `TOSHSD.JLM`, plus the `.COM` clients from
 `crates/cbprobe/build.sh`, which is NASM-only).
 
@@ -114,6 +116,6 @@ Stated plainly, so nobody has to discover it by failing:
   prerequisites (see the README); the parent project's image
   pipeline fetches them separately, and so must any user of these
   drivers.
-- The workspace `Cargo.toml` covers the ten driver and shared-library crates.
+- The workspace `Cargo.toml` covers the twelve driver and shared-library crates.
   The parent project's workspace also contains non-driver crates
   (`hwscan`, `ali-probe`, `pwr-probe`) that are not published here.

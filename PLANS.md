@@ -53,6 +53,10 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - I.1: experimental FRES.JLM (FD07) resident ownership service committed. Client integration and runtime unload tests pending.
 - I.2: extracted the qualified 8255x configuration bytes into ferric-i8255x and wired the legacy core to the same source; no standalone Ethernet JLM yet.
 
+- CI checkpoint `2c0dc50`: host tests and all seven JLM builds passed, including FRES.
+- I.2: moved DMA geometry into ferric-i8255x and added checked address arithmetic tests; legacy uses the shared geometry.
+- I.1: TOSHSD requires FRES v1.0 and claims its PCI device before writes; releases after shutdown and unregisters at detach. Runtime qualification pending.
+
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.
