@@ -3748,145 +3748,21 @@ unsafe fn net_configure(st: &mut NetState, promisc: bool) -> bool {
     }
 }
 
-// ---------------------------------------------------------------------
-// EEPROM (bit-banged Microwire through SCB_EECTRL) and the MAC address.
-// ---------------------------------------------------------------------
-
-const EE_CS: u8 = 0x02;
-const EE_SK: u8 = 0x01;
-const EE_DI: u8 = 0x04;
-const EE_DO: u8 = 0x08;
-
-unsafe fn ee_clock(io: u16, base: u8) {
-    unsafe {
-        outb(io + SCB_EECTRL, base | EE_SK);
-        // Port reads pace the clock (each is a bus transaction); the
-        // EEPROM wants ~1 us edges, far below anything this loop can
-        // produce on a 386-class bus.
-        for _ in 0..16 {
-            let _ = inb(io + SCB_EECTRL);
-        }
-        outb(io + SCB_EECTRL, base);
-    }
+// Hardware adapters for the shared 8255x serial protocols.
+struct NetSerialIo(u16);
+impl ferric_i8255x::serial::EepromIo for NetSerialIo {
+    fn write_control(&mut self, value: u8) { unsafe { outb(self.0 + SCB_EECTRL, value) }; }
+    fn read_control(&mut self) -> u8 { unsafe { inb(self.0 + SCB_EECTRL) } }
 }
-
-unsafe fn ee_read_word(io: u16, addr: u8, addr_len: u8) -> u16 {
-    unsafe {
-        outb(io + SCB_EECTRL, 0);
-        outb(io + SCB_EECTRL, EE_CS);
-        // Start bit + read opcode (binary 110), MSB first.
-        for bit in [true, true, false] {
-            let base = EE_CS | (if bit { EE_DI } else { 0 });
-            ee_clock(io, base);
-        }
-        for i in (0..addr_len).rev() {
-            let base = EE_CS | (if (addr >> i) & 1 == 1 { EE_DI } else { 0 });
-            ee_clock(io, base);
-        }
-        let mut data: u16 = 0;
-        for _ in 0..16 {
-            outb(io + SCB_EECTRL, EE_CS | EE_SK);
-            for _ in 0..16 {
-                let _ = inb(io + SCB_EECTRL);
-            }
-            let sample = inb(io + SCB_EECTRL) & EE_DO;
-            outb(io + SCB_EECTRL, EE_CS);
-            data = (data << 1) | u16::from(sample != 0);
-        }
-        outb(io + SCB_EECTRL, 0);
-        for _ in 0..16 {
-            let _ = inb(io + SCB_EECTRL);
-        }
-        data
-    }
+impl ferric_i8255x::serial::MdiIo for NetSerialIo {
+    fn write_mdi(&mut self, value: u32) { unsafe { outl(self.0 + SCB_MDI, value) }; }
+    fn read_mdi(&mut self) -> u32 { unsafe { inl(self.0 + SCB_MDI) } }
 }
-
-/// The station address lives in EEPROM words 0..2, little-endian per
-/// word. Address length depends on the EEPROM fitted: 64-word parts
-/// take 6 address bits, 256-word parts take 8. A wrong-length read
-/// yields shifted bits, and the result is NOT harmless: services
-/// that key on the station address treat the shifted value as a
-/// different machine. The 2026-11-21 DynaBook run proved it — the
-/// 6-bit read "won" with 00-00-00-00-0D-EE, and the LAN's DHCP
-/// server, whose one-address pool was already leased to the address
-/// the PXE ROM had presented, had nothing to offer the stranger.
-///
-/// Selection is therefore evidence-based. The EEPROM's first 64
-/// words carry a checksum: summed (including the checksum word at
-/// 0x3F) they total 0xBABA, for 64- and 256-word parts alike. A
-/// width is trusted only when its 64 words check out. If no width
-/// validates, fall back to the first plausible read (both low words
-/// nonzero, unicast first byte) — an emulator's EEPROM may not
-/// carry a valid checksum — and only if that fails too report no
-/// EEPROM MAC. Returns the address, the width that produced it,
-/// and whether the checksum vouched for it.
 unsafe fn ee_read_mac(io: u16) -> Option<([u8; 6], u8, bool)> {
-    fn words_to_mac(w: [u16; 3]) -> [u8; 6] {
-        [
-            (w[0] & 0xFF) as u8,
-            (w[0] >> 8) as u8,
-            (w[1] & 0xFF) as u8,
-            (w[1] >> 8) as u8,
-            (w[2] & 0xFF) as u8,
-            (w[2] >> 8) as u8,
-        ]
-    }
-    unsafe {
-        for len in [6u8, 8, 7] {
-            let mut sum: u16 = 0;
-            let mut words = [0u16; 3];
-            for addr in 0..64u8 {
-                let w = ee_read_word(io, addr, len);
-                if addr < 3 {
-                    words[addr as usize] = w;
-                }
-                sum = sum.wrapping_add(w);
-            }
-            if sum == 0xBABA {
-                return Some((words_to_mac(words), len, true));
-            }
-        }
-        for len in [6u8, 8, 7] {
-            let w0 = ee_read_word(io, 0, len);
-            let w1 = ee_read_word(io, 1, len);
-            let w2 = ee_read_word(io, 2, len);
-            let mac = words_to_mac([w0, w1, w2]);
-            if w0 != 0 && w1 != 0 && mac != [0; 6] && mac != [0xFF; 6] && mac[0] & 1 == 0 {
-                return Some((mac, len, false));
-            }
-        }
-        None
-    }
+    ferric_i8255x::serial::read_mac(&mut NetSerialIo(io))
 }
-
-// ---------------------------------------------------------------------
-// MDI / PHY: link status only (the internal PHY is at address 1).
-// ---------------------------------------------------------------------
-
-unsafe fn mdi_read(io: u16, reg: u8) -> u16 {
-    unsafe {
-        outl(
-            io + SCB_MDI,
-            0x0800_0000 | ((1u32) << 21) | ((reg as u32) << 16),
-        );
-        for _ in 0..100_000 {
-            let v = inl(io + SCB_MDI);
-            if v & 0x1000_0000 != 0 {
-                return (v & 0xFFFF) as u16;
-            }
-        }
-        0
-    }
-}
-
 unsafe fn link_is_up(io: u16) -> bool {
-    // IEEE 802.3 MII BMSR (reg 1) bit 2 (Link Status) is latch-low:
-    // the first read after reset returns any latched drop; read twice
-    // to observe live link state.
-    unsafe {
-        let _ = mdi_read(io, 1);
-        mdi_read(io, 1) & 0x0004 != 0
-    }
+    ferric_i8255x::serial::link_is_up(&mut NetSerialIo(io), 1)
 }
 
 // ---------------------------------------------------------------------

@@ -57,6 +57,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - I.2: moved DMA geometry into ferric-i8255x and added checked address arithmetic tests; legacy uses the shared geometry.
 - I.1: TOSHSD requires FRES v1.0 and claims its PCI device before writes; releases after shutdown and unregisters at detach. Runtime qualification pending.
 
+- I.2: extracted Microwire EEPROM and MDI/PHY protocols into ferric-i8255x with mock-I/O tests, retaining the legacy port adapter.
+
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.
