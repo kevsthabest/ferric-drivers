@@ -11,6 +11,12 @@ resident core module hosts several drivers, and a few satellite
 modules plug into the core. Each driver set has its own section under
 [`docs/drivers/`](docs/drivers/).
 
+## Development roadmap
+
+[PLANS.md](PLANS.md) tracks Stage I: independently loadable drivers, qualification and eventual opt-in integration into Ferric DOS. The existing integrated core remains the compatibility baseline.
+
+**Current safety restriction:** do not load standalone `PMU.JLM` or `TOSHSD.JLM` alongside `FERRIC.JLM` until coordinated device ownership is implemented. Use the integrated versions or the standalone versions, not both.
+
 ## Prerequisites
 
 - **FreeDOS** (or a compatible DOS) as the host system.
