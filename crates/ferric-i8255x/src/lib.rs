@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
+pub mod dma;
+
 /// The 8255x Configure command (22 bytes, verified against Linux
 /// `e100.c` `e100_configure()` and the Intel 8255x OpenSDM):
 ///   [0]  0x16 = 22 bytes

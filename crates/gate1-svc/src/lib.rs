@@ -3396,35 +3396,12 @@ unsafe fn pci_write32(bus: u8, dev: u8, func: u8, off: u8, val: u32) {
 // DMA region layout (one 16 KiB block).
 // ---------------------------------------------------------------------
 
-const RFD_COUNT: usize = 8;
-const RFD_STRIDE: usize = 1552; // 16-byte header + 1536-byte frame buffer
-const RFD_HDR: usize = 16;
-const FRAME_BUF: usize = 1536;
-const TXCB_OFF: usize = RFD_COUNT * RFD_STRIDE; // 12416
-const TXBUF_OFF: usize = TXCB_OFF + 32; // 12448
-const STATS_OFF: usize = 14000;
-pub const NET_DMA_SIZE: usize = 16384;
-pub const NET_DMA_PARAS: u32 = (NET_DMA_SIZE / 16) as u32;
-
-// RFD field offsets (simplified mode).
-const RFD_STATUS: usize = 0;
-const RFD_CMD: usize = 2;
-const RFD_LINK: usize = 4;
-const RFD_RBD: usize = 8;
-const RFD_ACTUAL: usize = 12;
-const RFD_SIZE: usize = 14;
-
-// Command-block field offsets (TXCB_OFF); the parameter word for
-// Configure / IA-setup lives at +8.
-const CB_STATUS: usize = 0;
-const CB_CMD: usize = 2;
-const CB_LINK: usize = 4;
-const CB_PARAM: usize = 8;
-const CB_TBD_ADDR: usize = 8;
-const CB_THRESH: usize = 14;
-const CB_TBD_COUNT: usize = 15;
-const TBD_ADDR: usize = 16;
-const TBD_LEN: usize = 20;
+pub use ferric_i8255x::dma::{NET_DMA_SIZE, NET_DMA_PARAS};
+use ferric_i8255x::dma::{
+    RFD_COUNT, RFD_STRIDE, RFD_HDR, FRAME_BUF, TXCB_OFF, TXBUF_OFF, STATS_OFF,
+    RFD_STATUS, RFD_CMD, RFD_LINK, RFD_RBD, RFD_ACTUAL, RFD_SIZE,
+    CB_STATUS, CB_CMD, CB_LINK, CB_PARAM, CB_TBD_ADDR, CB_THRESH, CB_TBD_COUNT, TBD_ADDR, TBD_LEN,
+};
 
 // SCB register offsets from the I/O base (BAR1).
 const SCB_STATUS: u16 = 0;
