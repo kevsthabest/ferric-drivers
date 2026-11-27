@@ -31,7 +31,7 @@ for crate in ferric-exfat ferric-ntfs ferric-vbe; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "abi=$tmp/libabi.rlib"
 done
-for crate in ferric-pmu ferric-sd; do
+for crate in ferric-pmu ferric-sd ferric-res; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "ferric_hw=$tmp/libferric_hw.rlib"
 done

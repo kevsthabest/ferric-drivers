@@ -36,6 +36,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferric-res"
+version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
+
+[[package]]
 name = "ferric-sd"
 version = "0.1.0"
 dependencies = [
