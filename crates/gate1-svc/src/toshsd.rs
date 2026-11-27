@@ -524,7 +524,6 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
             o.crlf();
             return o.pos as u32;
         };
-        st.present = true;
         st.bus = bus;
         st.dev = dev;
         st.func = func;
@@ -567,6 +566,7 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         }
         st.mapped_phys = bar;
         st.mapped_lin = lin;
+        st.present = true;
     }
 
     o.str("SD: Toshiba 1179:");
@@ -714,7 +714,12 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
 
     // CMD16: SET_BLOCKLEN = 512 (required for SDSC)
     if !st.is_sdhc {
-        let _ = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) };
+        if let Err(e) = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) } {
+            o.str("SD: CMD16 failed sts=0x");
+            o.hex32(e);
+            o.crlf();
+            return o.pos as u32;
+        }
     }
 
     // Switch clock to 16.5 MHz (div=2)
