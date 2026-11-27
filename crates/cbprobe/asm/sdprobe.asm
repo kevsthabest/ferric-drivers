@@ -295,18 +295,8 @@ jlm_seg:      dw 0
 req_lba:      dd 0
 
 msg_no_jlm:   db 'SDPROBE: neither TOSHSD.JLM nor FERRIC.JLM loaded', 13, 10, '$'
-msg_shut:     db 'SDPROBE: Toshiba SD slot powered down.', 13, 10, '
-msg_read_err: db 'SDPROBE: sector read failed, err=0x$'
-
-sec_buf:      times 512 db 0
-io_buf:       times 2048 db 0
-
-msg_shutdown_err: db 'SDPROBE: shutdown failed, err=0x
-msg_read_err: db 'SDPROBE: sector read failed, err=0x$'
-
-sec_buf:      times 512 db 0
-io_buf:       times 2048 db 0
-
+msg_shut:     db 'SDPROBE: Toshiba SD slot powered down.', 13, 10, '$'
+msg_shutdown_err: db 'SDPROBE: shutdown failed, err=0x$'
 msg_read_err: db 'SDPROBE: sector read failed, err=0x$'
 
 sec_buf:      times 512 db 0
