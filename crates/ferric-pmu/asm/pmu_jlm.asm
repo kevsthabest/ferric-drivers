@@ -111,26 +111,6 @@ _v86_dispatch:
     lea edx, [eax + ecx]
     cmp edx, 0x100000
     ja .bad_buffer
-    test ecx, ecx
-    jz .bad_buffer
-    test eax, eax
-    jz .bad_buffer
-    add edx, ecx
-    cmp edx, 0x10000
-    ja .bad_buffer
-    lea edx, [eax + ecx]
-    cmp edx, 0x100000
-    ja .bad_buffer
-    test ecx, ecx
-    jz .bad_buffer
-    test eax, eax
-    jz .bad_buffer
-    add edx, ecx
-    cmp edx, 0x10000
-    ja .bad_buffer
-    lea edx, [eax + ecx]
-    cmp edx, 0x100000
-    ja .bad_buffer
     mov edx, esp
     mov esp, pmu_r0_stack_top
     push edx
@@ -148,6 +128,16 @@ _v86_dispatch:
     movzx edx, word [ebp + CLIENT_EDI]
     add eax, edx
     movzx ecx, word [ebp + CLIENT_ECX]
+    test ecx, ecx
+    jz .bad_buffer
+    test eax, eax
+    jz .bad_buffer
+    add edx, ecx
+    cmp edx, 0x10000
+    ja .bad_buffer
+    lea edx, [eax + ecx]
+    cmp edx, 0x100000
+    ja .bad_buffer
     movzx ebx, word [ebp + CLIENT_EBX]
     mov edx, esp
     mov esp, pmu_r0_stack_top
@@ -167,6 +157,16 @@ _v86_dispatch:
     movzx edx, word [ebp + CLIENT_EDI]
     add eax, edx
     movzx ecx, word [ebp + CLIENT_ECX]
+    test ecx, ecx
+    jz .bad_buffer
+    test eax, eax
+    jz .bad_buffer
+    add edx, ecx
+    cmp edx, 0x10000
+    ja .bad_buffer
+    lea edx, [eax + ecx]
+    cmp edx, 0x100000
+    ja .bad_buffer
     movzx ebx, word [ebp + CLIENT_EBX]
     mov edx, esp
     mov esp, pmu_r0_stack_top

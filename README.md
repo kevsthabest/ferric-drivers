@@ -15,7 +15,7 @@ modules plug into the core. Each driver set has its own section under
 
 [PLANS.md](PLANS.md) tracks Stage I: independently loadable drivers, qualification and eventual opt-in integration into Ferric DOS. The existing integrated core remains the compatibility baseline.
 
-**Current safety restriction:** do not load standalone `PMU.JLM` or `TOSHSD.JLM` alongside `FERRIC.JLM` until coordinated device ownership is implemented. Use the integrated versions or the standalone versions, not both.
+**Current safety restriction:** use either `FERRIC.JLM` or the standalone `PMU.JLM` / `TOSHSD.JLM` modules, not both. Stage I builds reject the conflicting load in either order using Jemm's device lookup; this is a temporary compatibility guard, not global PCI ownership. The guard requires the updated integrated core if it is loaded second.
 
 ## Prerequisites
 

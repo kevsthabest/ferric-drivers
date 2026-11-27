@@ -44,12 +44,13 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 ## Progress (2026-11-27)
 
 - I.0: SD BAR subpage mapping, checked LBA/address arithmetic, readiness checks and standalone fail-closed allocation landed on the development branch. Integrated compatibility allocator retained. PCI configuration/power rollback on map failure is partial; mapping release and full lifecycle are still outstanding.
-- I.0: independent build/host-test entry points and qualification procedure added; execution pending.
+- I.0: independent build/host-test entry points, qualification procedure and PR CI workflow added; execution pending.
+- I.0: added bidirectional FERRIC/standalone module conflict checks for Stage I builds, low-memory client-buffer bounds checks, and standalone SD page release and PCI command/power restoration. Runtime qualification remains pending.
 - I.1: pure `ferric-hw` crate introduced (PCI address and MMIO mapping arithmetic); host tests added. Runtime PCI serialization, global ownership, IRQ/DMA and calibrated timing are not implemented yet.
 
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.
-- Prevent standalone PMU/SD coexistence with integrated core until coordinated ownership is implemented.
+- Validate temporary standalone PMU/SD exclusion in both load orders; replace whole-module exclusion with per-device ownership in I.1.
 - Execute standalone build/test entry point and module acceptance matrix. Existing purity checks are not runtime qualification.
 - Investigate PCI allocator and calibrated timing before broad hardware claims.

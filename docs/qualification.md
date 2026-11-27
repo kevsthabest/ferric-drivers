@@ -29,11 +29,16 @@ in the public repository.
 | Out-of-range LBA | Rejected before issuing command | Host test added; runtime pending |
 | Removal, reinsertion and reinit | Stale readiness rejected; successful reinit after insertion | Pending |
 | Init failure / retry / unload | No stale mapping or access to unclaimed resources | Pending |
+| FERRIC first, then standalone PMU/SD | JLOAD rejects standalone attach before hardware access | Pending |
+| Standalone first, then Stage I FERRIC | JLOAD rejects integrated attach before hardware access | Pending |
+| Malformed client buffers | Null, segment wrap and HMA addresses rejected | Pending |
 
 Use SDPROBE /R <lba> for selected reads, SDPROBE /U before unloading.
 Do not test SD writes: this module is strictly read-only. Use read-only
 test media and compare captured sector contents, not merely a success string.
 Do not assume hot-swapping without reinitialization is supported.
+The temporary load guard does not detect unrelated third-party TSRs and
+cannot prevent an older integrated FERRIC build being loaded second.
 
 ## Future extraction gate
 

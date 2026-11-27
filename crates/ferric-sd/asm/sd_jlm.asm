@@ -188,11 +188,11 @@ _v86_dispatch:
     movzx edx, word [ebp + CLIENT_EDI]
     add eax, edx
     test eax, eax
-    jz .bad_buffer
+    jz .bad_read_buffer
     cmp edx, 0xFE00
-    ja .bad_buffer
+    ja .bad_read_buffer
     cmp eax, 0xFFE00
-    ja .bad_buffer
+    ja .bad_read_buffer
     mov ebx, [ebp + CLIENT_EBX]
     mov edx, esp
     mov esp, sd_r0_stack_top
@@ -212,6 +212,11 @@ _v86_dispatch:
     call gate1_sd_shutdown
     pop esp
     mov word [ebp + CLIENT_EAX], ax
+    ret
+
+.bad_read_buffer:
+    mov word [ebp + CLIENT_EAX], 1
+    or dword [ebp + CLIENT_EFLAGS], 1
     ret
 
 .bad_buffer:
