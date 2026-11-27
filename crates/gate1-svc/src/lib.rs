@@ -3687,7 +3687,6 @@ unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) -> Result<(), ferric_i8255x::scb::C
     ferric_i8255x::scb::submit(&mut NetScbIo(io), gp, cmd, 2, SCB_POLL_LIMIT)
 }
 
-use ferric_i8255x::scb::ScbIo;
 struct NetDeviceIo { port: NetScbIo, lin: u32 }
 impl ferric_i8255x::scb::ScbIo for NetDeviceIo {
     fn command(&mut self) -> u8 { self.port.command() }
