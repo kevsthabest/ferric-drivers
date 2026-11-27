@@ -2,10 +2,27 @@
 
 Every module in this repository is built the same way: by its own
 per-crate `build.sh`, run from the repository root, inside the pinned
-build container. There is no single top-level build command, and a
-plain `cargo build` does **not** produce a usable module — it stops
+build container. A driver-only aggregate build and test entry point is
+available below; a plain `cargo build` does **not** produce a usable module — it stops
 halfway, at a Rust static library that still needs linking,
 conversion, assembly, and packaging before Jemm will load it.
+
+## Build and test all driver modules
+
+From a clean checkout on a Docker host:
+
+```sh
+docker build -t ferric-drivers-build .
+docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-drivers.sh
+```
+
+The script runs host unit tests for all ten workspace crates, builds six
+JLMs and their DOS clients using the existing per-module purity checks,
+and prints artifact hashes. Use `--host-only` for native unit tests only,
+or `sh scripts/build-drivers.sh` for target builds only. The external
+VSBHDA backend is excluded: its separate source checkouts are documented
+in drivers/vsbhda/README.md. These scripts do not boot a DOS image or
+qualify real hardware. See [qualification.md](qualification.md).
 
 ## Building one driver at a time
 
@@ -25,11 +42,15 @@ to be built first.
 | `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
 | `drivers/vsbhda/build.sh` | `ALI5451.DRV` / `ALIDET.DRV` — 32-bit external ALi M5451 backend for upstream VSBHDA v2.1 (see [`drivers/vsbhda/README.md`](../drivers/vsbhda/README.md) for the two external source checkouts required) |
 
-Three crates have no build script of their own — `abi`, `wifi-core`,
-and `ferric-ehci` are libraries, and they compile in as dependencies
+Four crates have no build script of their own — `abi`, `wifi-core`,
+`ferric-hw`, and `ferric-ehci` are libraries, and they compile in as dependencies
 of the builds above.
 
 ## Loading and using the built modules on DOS
+
+For standalone PMU/SD, use only the respective module and its client;
+do not load it alongside FERRIC.JLM until ownership is coordinated.
+The following is the integrated compatibility profile:
 
 1. Boot FreeDOS with `DEVICE=JEMMEX.EXE NOEMS D=64` (and `DEVICE=USBDRV.SYS` if using USB mass-storage drive letters).
 2. Load the resident core first: `JLOAD.EXE FERRIC.JLM`.
@@ -72,7 +93,7 @@ modules follow the same shape):
 6. PX-patch the DLL into the final `.JLM` file under `out/`.
 
 Outputs land in `out/` at the repository root (`FERRIC.JLM`,
-`EXFAT.JLM`, `NTFS.JLM`, `VBE.JLM`, plus the `.COM` clients from
+`EXFAT.JLM`, `NTFS.JLM`, `VBE.JLM`, `PMU.JLM`, `TOSHSD.JLM`, plus the `.COM` clients from
 `crates/cbprobe/build.sh`, which is NASM-only).
 
 ## What this repository does not include
@@ -93,6 +114,6 @@ Stated plainly, so nobody has to discover it by failing:
   prerequisites (see the README); the parent project's image
   pipeline fetches them separately, and so must any user of these
   drivers.
-- The workspace `Cargo.toml` covers only the seven driver crates.
+- The workspace `Cargo.toml` covers the ten driver and shared-library crates.
   The parent project's workspace also contains non-driver crates
   (`hwscan`, `ali-probe`, `pwr-probe`) that are not published here.

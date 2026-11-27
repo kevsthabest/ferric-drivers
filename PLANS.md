@@ -41,9 +41,15 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 6. Publish versioned artifacts, supported IDs, dependencies, limitations and license notices. Preserve previous known-good release.
 7. Ferric DOS adopts pinned release in opt-in profile only; default remains untouched until owner accepts physical regression tests.
 
+## Progress (2026-11-27)
+
+- I.0: SD BAR subpage mapping, checked LBA/address arithmetic, readiness checks and standalone fail-closed allocation landed on the development branch. Integrated compatibility allocator retained. PCI configuration/power rollback on map failure is partial; mapping release and full lifecycle are still outstanding.
+- I.0: independent build/host-test entry points and qualification procedure added; execution pending.
+- I.1: pure `ferric-hw` crate introduced (PCI address and MMIO mapping arithmetic); host tests added. Runtime PCI serialization, global ownership, IRQ/DMA and calibrated timing are not implemented yet.
+
 ## Immediate backlog
-- SD: preserve BAR0 subpage offset (observed F7EBDC00); prevent partial initialization state from being reused; propagate CMD16 failure; require inserted-card read and removal tests.
+- SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.
 - Prevent standalone PMU/SD coexistence with integrated core until coordinated ownership is implemented.
-- Add standalone build/test entry point and module acceptance matrix. Existing purity checks are not runtime qualification.
+- Execute standalone build/test entry point and module acceptance matrix. Existing purity checks are not runtime qualification.
 - Investigate PCI allocator and calibrated timing before broad hardware claims.
