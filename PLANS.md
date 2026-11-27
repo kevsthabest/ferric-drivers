@@ -12,7 +12,7 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 | Phase | Deliverable | Status |
 |---|---|---|
 | I.0 | Roadmap, safety fixes, independent build/test entry point | Active |
-| I.1 | Shared no_std PCI/MMIO/IRQ/DMA/time and device ownership interfaces | Planned |
+| I.1 | Shared no_std PCI/MMIO/IRQ/DMA/time and device ownership interfaces | Active |
 | I.2 | Independent Intel 8255x module and packet facade | Planned |
 | I.3 | CardBus provider and Atheros module | Planned |
 | I.4 | PS/2 and USB mouse service with INT 33h ownership | Planned |
@@ -46,7 +46,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - I.0: SD BAR subpage mapping, checked LBA/address arithmetic, readiness checks and standalone fail-closed allocation landed on the development branch. Integrated compatibility allocator retained. PCI configuration/power rollback on map failure is partial; mapping release and full lifecycle are still outstanding.
 - I.0: independent build/host-test entry points, qualification procedure and PR CI workflow added; execution pending.
 - I.0: added bidirectional FERRIC/standalone module conflict checks for Stage I builds, low-memory client-buffer bounds checks, and standalone SD page release and PCI command/power restoration. Runtime qualification remains pending.
-- I.1: pure `ferric-hw` crate introduced (PCI address and MMIO mapping arithmetic); host tests added. Runtime PCI serialization, global ownership, IRQ/DMA and calibrated timing are not implemented yet.
+- I.1: `ferric-hw` provides PCI address and MMIO mapping arithmetic, interrupt-preserving PCI configuration transactions for standalone PMU/SD, direct byte-width writes, and a tested exclusive resource claim-table model. The table is not yet a resident broker; global ownership, shared IRQ/DMA services and calibrated timing remain outstanding.
+- CI checkpoint `211a960` passed; subsequent `caf839c` passed all host tests and six JLM builds but failed SDPROBE assembly. Fixed in `6a31ae7`; new CI required.
 
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.

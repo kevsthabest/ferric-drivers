@@ -5,6 +5,7 @@
 #![deny(warnings)]
 
 pub mod pci;
+pub mod ownership;
 
 /// PCI configuration mechanism #1 address. Reject invalid BDF and unaligned offsets.
 pub const fn pci_config_address(bus: u8, device: u8, function: u8, offset: u8) -> Option<u32> {
