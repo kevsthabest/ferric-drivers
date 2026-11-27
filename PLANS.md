@@ -13,7 +13,7 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 |---|---|---|
 | I.0 | Roadmap, safety fixes, independent build/test entry point | Active |
 | I.1 | Shared no_std PCI/MMIO/IRQ/DMA/time and device ownership interfaces | Active |
-| I.2 | Independent Intel 8255x module and packet facade | Planned |
+| I.2 | Independent Intel 8255x module and packet facade | Started (pure primitives) |
 | I.3 | CardBus provider and Atheros module | Planned |
 | I.4 | PS/2 and USB mouse service with INT 33h ownership | Planned |
 | I.5 | OHCI and EHCI providers, common USB enumeration/storage/HID | Planned |
@@ -48,6 +48,10 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - I.0: added bidirectional FERRIC/standalone module conflict checks for Stage I builds, low-memory client-buffer bounds checks, and standalone SD page release and PCI command/power restoration. Runtime qualification remains pending.
 - I.1: `ferric-hw` provides PCI address and MMIO mapping arithmetic, interrupt-preserving PCI configuration transactions for standalone PMU/SD, direct byte-width writes, and a tested exclusive resource claim-table model. The table is not yet a resident broker; global ownership, shared IRQ/DMA services and calibrated timing remain outstanding.
 - CI checkpoint `211a960` passed; subsequent `caf839c` passed all host tests and six JLM builds but failed SDPROBE assembly. Fixed in `6a31ae7`; new CI required.
+
+- CI checkpoint `3bb018b`: successful host tests and target builds. Later changes require a fresh run.
+- I.1: experimental FRES.JLM (FD07) resident ownership service committed. Client integration and runtime unload tests pending.
+- I.2: extracted the qualified 8255x configuration bytes into ferric-i8255x and wired the legacy core to the same source; no standalone Ethernet JLM yet.
 
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.

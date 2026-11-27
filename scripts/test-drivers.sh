@@ -21,7 +21,7 @@ build_lib() {
     path="$2"
     rustc --crate-type rlib --edition 2024 --crate-name "$name" "$path" -o "$tmp/lib$name.rlib"
 }
-for crate in abi ferric-hw wifi-core ferric-ehci; do
+for crate in abi ferric-hw wifi-core ferric-ehci ferric-i8255x; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     path="crates/$crate/src/lib.rs"
     build_lib "$name" "$path"
@@ -38,6 +38,7 @@ done
 test_crate gate1_svc crates/gate1-svc/src/lib.rs \
     --extern "abi=$tmp/libabi.rlib" \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \
+    --extern "ferric_i8255x=$tmp/libferric_i8255x.rlib" \
     --extern "ferric_ehci=$tmp/libferric_ehci.rlib" \
     --extern "wifi_core=$tmp/libwifi_core.rlib"
 if [ "${1:-}" != "--host-only" ]; then

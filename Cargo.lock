@@ -22,6 +22,10 @@ name = "ferric-hw"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-i8255x"
+version = "0.1.0"
+
+[[package]]
 name = "ferric-ntfs"
 version = "0.1.0"
 dependencies = [
@@ -63,6 +67,7 @@ dependencies = [
  "abi",
  "ferric-ehci",
  "ferric-hw",
+ "ferric-i8255x",
  "wifi-core",
 ]
 
