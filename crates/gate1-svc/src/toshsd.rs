@@ -583,11 +583,12 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
             o.crlf();
             // Restore the original PCI command and power state on failed mapping.
             unsafe {
-                pci_write32(bus, dev, func, 0x04, cmd & 0xFFFF);
                 if st.bar_assigned {
+                    pci_write32(bus, dev, func, 0x04, cmd & 0xFFFD);
                     pci_write32(bus, dev, func, 0x10, bar0);
                     st.bar_assigned = false;
                 }
+                pci_write32(bus, dev, func, 0x04, cmd & 0xFFFF);
                 if (pmcsr & 3) != 0 {
                     // PME status is W1C; do not echo it as a one.
                     pci_write32(bus, dev, func, 0x84, pmcsr & !0x8000);

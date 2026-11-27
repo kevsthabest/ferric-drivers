@@ -18,10 +18,14 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 #[cfg(not(test))]
 unsafe extern "C" {
     fn sd_map_mmio(phys: u32, npages: u32) -> u32;
+    fn sd_unmap_mmio(mapped_page: u32) -> u32;
 }
 
 #[cfg(test)]
 unsafe fn sd_map_mmio(_phys: u32, _npages: u32) -> u32 { 0 }
+
+#[cfg(test)]
+unsafe fn sd_unmap_mmio(_mapped_page: u32) -> u32 { 1 }
 
 #[cfg(target_arch = "x86")]
 pub(crate) unsafe fn inb(port: u16) -> u8 {

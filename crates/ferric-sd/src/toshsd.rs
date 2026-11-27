@@ -106,6 +106,8 @@ struct ToshSdState {
     bar_assigned: bool,
     mapped_phys: u32,
     mapped_lin: u32,
+    original_cmd: u32,
+    original_pmcsr: u32,
     card_ready: bool,
     is_sdhc: bool,
     write_protected: bool,
@@ -127,6 +129,8 @@ impl ToshSdState {
             bar_assigned: false,
             mapped_phys: 0,
             mapped_lin: 0,
+            original_cmd: 0,
+            original_pmcsr: 0,
             card_ready: false,
             is_sdhc: false,
             write_protected: true,
@@ -579,6 +583,8 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         };
         st.mapped_phys = bar;
         st.mapped_lin = lin;
+        st.original_cmd = cmd & 0xFFFF;
+        st.original_pmcsr = pmcsr;
         st.present = true;
     }
 
@@ -598,9 +604,14 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     o.crlf();
 
     st.card_ready = false;
-    unsafe { hw_reset_controller(st) };
-
     let base = st.mapped_lin;
+    // Check the mapping before writing any controller register.
+    if unsafe { mmio_r32(base, REG_CARDSTATUS) } == u32::MAX {
+        o.str("SD: MMIO not responding before reset");
+        o.crlf();
+        return o.pos as u32;
+    }
+    unsafe { hw_reset_controller(st) };
     let status = unsafe { mmio_r32(base, REG_CARDSTATUS) };
     if status == 0xFFFF_FFFF {
         o.str("SD: MMIO returned 0xFFFFFFFF (controller not responding)");
@@ -812,18 +823,29 @@ pub extern "C" fn gate1_sd_read_sec(lba: u32, out_ptr: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn gate1_sd_shutdown() -> u32 {
     let st = sd_state();
+    st.card_ready = false;
     if st.present && st.mapped_lin != 0 {
         let base = st.mapped_lin;
         unsafe {
-            mmio_w32(base, REG_INTMASKCARD, 0xFFFF_FFFF);
-            mmio_w16(base, REG_SDIO_LEDCTRL, 0);
-            mmio_w16(base, REG_SDIO_CLOCKNWAIT, 0);
-            mmio_w16(base, REG_CARDCLOCKCTRL, 0);
-            pci_write8(st.bus, st.dev, st.func, CFG_POWER1, PWR1_OFF);
-            pci_write8(st.bus, st.dev, st.func, CFG_CLKSTOP, 0);
+            if mmio_r32(base, REG_CARDSTATUS) != u32::MAX {
+                mmio_w32(base, REG_INTMASKCARD, 0xFFFF_FFFF);
+                mmio_w16(base, REG_SDIO_LEDCTRL, 0);
+                mmio_w16(base, REG_SDIO_CLOCKNWAIT, 0);
+                mmio_w16(base, REG_CARDCLOCKCTRL, 0);
+                pci_write8(st.bus, st.dev, st.func, CFG_POWER1, PWR1_OFF);
+                pci_write8(st.bus, st.dev, st.func, CFG_CLKSTOP, 0);
+            }
+            // Release the page-aligned reservation, not the register offset.
+            if crate::sd_unmap_mmio(base & !0xFFF) == 0 {
+                return 6;
+            }
+            pci_write32(st.bus, st.dev, st.func, 0x04, st.original_cmd);
+            if st.original_pmcsr & 3 != 0 {
+                pci_write32(st.bus, st.dev, st.func, 0x84, st.original_pmcsr & !0x8000);
+            }
         }
+        *st = ToshSdState::new();
     }
-    st.card_ready = false;
     0
 }
 
