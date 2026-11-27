@@ -10,7 +10,7 @@
 
 use core::cell::UnsafeCell;
 
-use crate::{cardbus, pci_read32, pci_write32};
+use crate::{cardbus, pci_read32, pci_write8, pci_write32};
 
 const TOSHIBA_VID: u16 = 0x1179;
 const TOSHSD_DID_A: u16 = 0x0805; // DynaBook SS 2000M built-in SD slot (00:12.0)
@@ -252,14 +252,7 @@ unsafe fn mmio_w32(base: u32, off: usize, val: u32) {
     unsafe { core::ptr::write_volatile((base as usize + off) as *mut u32, val) };
 }
 
-unsafe fn pci_write8(bus: u8, dev: u8, func: u8, off: u8, val: u8) {
-    let aligned = off & !3;
-    let shift = (off & 3) * 8;
-    let mut dw = unsafe { pci_read32(bus, dev, func, aligned) };
-    dw &= !(0xFFu32 << shift);
-    dw |= (val as u32) << shift;
-    unsafe { pci_write32(bus, dev, func, aligned, dw) };
-}
+
 
 unsafe fn find_toshsd_pci() -> Option<(u8, u8, u8, u16, u8, u32)> {
     for dev in 0..32u8 {

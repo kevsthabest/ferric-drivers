@@ -36,48 +36,10 @@ pub(crate) unsafe fn inb(port: u16) -> u8 {
     val
 }
 
-#[cfg(target_arch = "x86")]
-pub(crate) unsafe fn inl(port: u16) -> u32 {
-    let val: u32;
-    unsafe {
-        core::arch::asm!("in eax, dx", in("dx") port, out("eax") val, options(nomem, nostack));
-    }
-    val
-}
-
-#[cfg(target_arch = "x86")]
-pub(crate) unsafe fn outl(port: u16, val: u32) {
-    unsafe {
-        core::arch::asm!("out dx, eax", in("dx") port, in("eax") val, options(nomem, nostack));
-    }
-}
-
 #[cfg(not(target_arch = "x86"))]
 pub(crate) unsafe fn inb(_port: u16) -> u8 { 0 }
-#[cfg(not(target_arch = "x86"))]
-pub(crate) unsafe fn inl(_port: u16) -> u32 { 0xFFFF_FFFF }
-#[cfg(not(target_arch = "x86"))]
-pub(crate) unsafe fn outl(_port: u16, _val: u32) {}
-
-pub(crate) unsafe fn pci_read32(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
-    let Some(addr) = ferric_hw::pci_config_address(bus, dev, func, reg & 0xFC) else {
-        return u32::MAX;
-    };
-    unsafe {
-        outl(0x0CF8, addr);
-        inl(0x0CFC)
-    }
-}
-
-pub(crate) unsafe fn pci_write32(bus: u8, dev: u8, func: u8, reg: u8, val: u32) {
-    let Some(addr) = ferric_hw::pci_config_address(bus, dev, func, reg & 0xFC) else {
-        return;
-    };
-    unsafe {
-        outl(0x0CF8, addr);
-        outl(0x0CFC, val);
-    }
-}
+pub(crate) use ferric_hw::pci::{read32 as pci_read32, write8 as pci_write8};
+pub(crate) use ferric_hw::pci::write32 as pci_write32;
 
 pub(crate) mod cardbus {
     pub fn delay_ms(ms: u32) {

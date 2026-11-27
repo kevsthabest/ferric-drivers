@@ -1,8 +1,10 @@
 //! Pure, host-testable hardware resource arithmetic shared by Ferric drivers.
-//! No privileged operations or global device ownership are implemented here.
+//! Global device ownership is not implemented here; privileged PCI access is isolated in pci.
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 #![deny(warnings)]
+
+pub mod pci;
 
 /// PCI configuration mechanism #1 address. Reject invalid BDF and unaligned offsets.
 pub const fn pci_config_address(bus: u8, device: u8, function: u8, offset: u8) -> Option<u32> {
