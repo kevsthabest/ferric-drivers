@@ -59,6 +59,9 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.2: extracted Microwire EEPROM and MDI/PHY protocols into ferric-i8255x with mock-I/O tests, retaining the legacy port adapter.
 
+- CI checkpoint `0ddac4b`: host tests and seven JLM target builds passed.
+- I.2: shared RX/TX descriptor encoding, checked DMA region input, and bounded SCB command submission. Failed bring-up after DMA lock quarantines its DOS allocation until reboot rather than freeing potentially active DMA. Full teardown and retry lifecycle still pending.
+
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.

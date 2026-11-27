@@ -515,8 +515,13 @@ _v86_net_init_call:
     push dword [net_dma_seg]
     call gate1_net_init
     add esp, 4
-    or eax, eax
-    jnz .nic_up
+    cmp eax, 1
+    je .nic_up
+    cmp eax, 2
+    jne .nic_fail
+    mov word [ebp + CLIENT_EAX], 5 ; retain DMA until reboot
+    ret
+.nic_fail:
     mov word [ebp + CLIENT_EAX], 3
     ret
 .nic_up:

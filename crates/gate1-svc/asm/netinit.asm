@@ -111,6 +111,8 @@ start:
     call far [entry_off]
     cmp ax, 0
     je .up
+    cmp ax, 5
+    je .quarantine
     mov word [status], 3
     jmp .free_report
 .up:
@@ -131,6 +133,17 @@ start:
     add dx, 15
     shr dx, 4
     mov ax, 0x3100
+    int 0x21
+
+.quarantine:
+    ; Bring-up may have started bus-master DMA. Keep both DOS blocks
+    ; resident and leave INT 60h unchanged. Reboot before retrying.
+    mov word [status], 5
+    call print_report
+    mov dx, netinit_end
+    add dx, 15
+    shr dx, 4
+    mov ax, 0x3105
     int 0x21
 
 .free_report:

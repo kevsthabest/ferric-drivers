@@ -3633,7 +3633,10 @@ pub extern "C" fn gate1_net_switch_backend(use_wifi: u32) -> u32 {
             let ru = inb(st.io_base + SCB_STATUS) & 0x3C;
             if ru != 0x10 {
                 net_ring_init(st);
-                scb_cmd(st.io_base, st.dma_phys, 0x01); // RUC_START
+                if scb_cmd(st.io_base, st.dma_phys, 0x01).is_err() {
+                    st.present = false;
+                    return 0;
+                }
             }
             outb(st.io_base + SCB_CMDHI, 0x00); // unmask 82550 interrupts
             if st.irq >= 8 {
@@ -3692,26 +3695,23 @@ fn dma_w32(lin: u32, off: usize, v: u32) {
 // SCB primitives.
 // ---------------------------------------------------------------------
 
-unsafe fn scb_wait_cmd(io: u16) {
-    let start = bios_tick();
-    loop {
-        if unsafe { inb(io + SCB_CMD) } == 0 {
-            return;
-        }
-        if bios_tick().wrapping_sub(start) > 2 {
-            return;
-        }
-    }
+struct NetScbIo(u16);
+impl ferric_i8255x::scb::ScbIo for NetScbIo {
+    fn command(&mut self) -> u8 { unsafe { inb(self.0 + SCB_CMD) } }
+    fn set_pointer(&mut self, p: u32) { unsafe { outl(self.0 + SCB_GP, p) }; }
+    fn set_command(&mut self, cmd: u8) { unsafe { outb(self.0 + SCB_CMD, cmd) }; }
+    fn tick(&mut self) -> u32 { bios_tick() }
 }
 
-/// Issue one SCB command with a general-pointer parameter.
-unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) {
-    unsafe {
-        scb_wait_cmd(io);
-        outl(io + SCB_GP, gp);
-        outb(io + SCB_CMD, cmd);
-        scb_wait_cmd(io);
-    }
+const SCB_POLL_LIMIT: u32 = 1_000_000;
+
+unsafe fn scb_wait_cmd(io: u16) -> bool {
+    ferric_i8255x::scb::wait_idle(&mut NetScbIo(io), 2, SCB_POLL_LIMIT)
+}
+
+/// Issue a command only if the previous command has been accepted.
+unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) -> Result<(), ferric_i8255x::scb::CommandError> {
+    ferric_i8255x::scb::submit(&mut NetScbIo(io), gp, cmd, 2, SCB_POLL_LIMIT)
 }
 
 /// Run the command block built at TXCB_OFF to completion (polled).
@@ -3719,9 +3719,9 @@ unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) {
 unsafe fn cu_exec(st: &mut NetState) -> bool {
     let io = st.io_base;
     let lin = st.dma_lin;
-    unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) }; // CUC_START
+    if unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) }.is_err() { return false; }
     let start = bios_tick();
-    loop {
+    for _ in 0..SCB_POLL_LIMIT {
         if dma_r16(lin, TXCB_OFF + CB_STATUS) & 0x8000 != 0 {
             return true;
         }
@@ -3729,6 +3729,7 @@ unsafe fn cu_exec(st: &mut NetState) -> bool {
             return false;
         }
     }
+    false
 }
 
 unsafe fn zero_cb(st: &NetState) {
@@ -3841,6 +3842,20 @@ pub unsafe extern "C" fn gate1_net_stub_copy(dest: u32) -> u32 {
     PKT_STUB.len() as u32
 }
 
+// A failed bring-up after DMA lock may have submitted a command. Mask the
+// device and request reset, but retain the backing DOS allocation until reboot.
+// Return 2 so NETINIT quarantines its allocation instead of freeing live DMA.
+unsafe fn net_init_failed(st: &mut NetState) -> u32 {
+    unsafe {
+        outb(st.io_base + SCB_CMDHI, 1);
+        outl(st.io_base + SCB_PORT, 0);
+    }
+    st.present = false;
+    st.eth_ready = false;
+    2
+}
+
+
 /// Build the receive ring in the DMA block (shared by bring-up and
 /// the packet driver's reset_interface).
 unsafe fn net_ring_init(st: &mut NetState) {
@@ -3901,13 +3916,12 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
         for _ in 0..4096 {
             let _ = inb(io + SCB_CMD);
         }
-        scb_wait_cmd(io);
-        // Flat physical addressing: both unit bases are zero.
-        scb_cmd(io, 0, 0x60); // CUC_LOAD_BASE
-        scb_cmd(io, 0, 0x06); // RUC_LOAD_BASE
+        if !scb_wait_cmd(io) || scb_cmd(io, 0, 0x60).is_err() || scb_cmd(io, 0, 0x06).is_err() {
+            return net_init_failed(st);
+        }
     }
     if !unsafe { net_configure(st, false) } {
-        return 0;
+        return unsafe { net_init_failed(st) };
     }
     st.stage = 3;
     unsafe {
@@ -3917,15 +3931,19 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
             dma_w8(st.dma_lin, TXCB_OFF + CB_PARAM + i, st.mac[i]);
         }
         if !cu_exec(st) {
-            return 0;
+            return net_init_failed(st);
         }
     }
     st.stage = 4;
     unsafe {
         // Statistics dump target (counters read on demand later).
-        scb_cmd(io, st.dma_phys + STATS_OFF as u32, 0x40); // CUC_DUMP_ADDR
+        if scb_cmd(io, st.dma_phys + STATS_OFF as u32, 0x40).is_err() {
+            return net_init_failed(st);
+        }
         net_ring_init(st);
-        scb_cmd(io, st.dma_phys, 0x01); // RUC_START at RFD 0
+        if scb_cmd(io, st.dma_phys, 0x01).is_err() {
+            return net_init_failed(st);
+        }
     }
     st.stage = 5;
     unsafe {
@@ -4058,7 +4076,7 @@ unsafe fn net_maybe_restart_ru(st: &mut NetState) {
     let ru = unsafe { inb(io + SCB_STATUS) } & 0x3C;
     if ru == 0x08 && st.ru_restart >= 0 {
         let gp = st.dma_phys + (st.ru_restart as usize * RFD_STRIDE) as u32;
-        unsafe { scb_cmd(io, gp, 0x01) }; // RUC_START
+        if unsafe { scb_cmd(io, gp, 0x01) }.is_err() { return; }
         st.ru_restart = -1;
     }
     st.ru_starved = false;
@@ -4320,8 +4338,12 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
             break;
         }
     }
-    unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) }; // CUC_START
-    true
+    match unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) } {
+        Ok(()) => true,
+        Err(ferric_i8255x::scb::CommandError::Busy) => { st.tx_busy = false; false }
+        // A submitted command may still complete; retain the TX buffer.
+        Err(ferric_i8255x::scb::CommandError::AcceptanceUnknown) => false,
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -4470,7 +4492,10 @@ pub unsafe extern "C" fn gate1_net_api(client: *mut u32) -> u32 {
             if !st.wifi_active {
                 unsafe {
                     net_ring_init(st);
-                    scb_cmd(st.io_base, st.dma_phys, 0x01);
+                    if scb_cmd(st.io_base, st.dma_phys, 0x01).is_err() {
+                        net_err(c, ERR_CANT_SEND);
+                        return 0;
+                    }
                 }
             }
             net_ok(c);
