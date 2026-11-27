@@ -3594,6 +3594,8 @@ pub extern "C" fn gate1_net_switch_backend(use_wifi: u32) -> u32 {
         st.wifi_active = false;
         st.present = true;
         st.mac = st.ethernet.eth_mac;
+        st.irq = st.ethernet.irq;
+        st.mac_eeprom = st.ethernet.mac_from_eeprom;
         st.svc_rfd = -1;
         st.svc_phase = 0;
         st.svc_budget = 0;
@@ -3634,6 +3636,8 @@ pub extern "C" fn gate1_net_switch_backend(use_wifi: u32) -> u32 {
         st.wifi_active = true;
         st.present = true;
         st.mac = st.wifi_mac;
+        st.irq = 11;
+        st.mac_eeprom = true;
         st.svc_rfd = -1;
         st.svc_phase = 0;
         st.svc_budget = 0;
@@ -3752,7 +3756,7 @@ unsafe fn link_is_up(io: u16) -> bool {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gate1_net_probe() -> u32 {
     let st = net_state();
-    if st.dev_ok {
+    if st.ethernet.probed {
         return 1;
     }
     for dev in 0..32u8 {
@@ -3762,17 +3766,24 @@ pub unsafe extern "C" fn gate1_net_probe() -> u32 {
         if vid != 0x8086 || (did != 0x1229 && did != 0x1209) {
             continue;
         }
-        let cmd = unsafe { pci_read32(0, dev, 0, 0x04) };
-        if cmd & 0x0005 != 0x0005 {
-            unsafe {
-                pci_write32(0, dev, 0, 0x04, (cmd & 0xFFFF_0000) | ((cmd & 0xFFFF) | 0x0005));
-            }
-        }
         let bar1 = unsafe { pci_read32(0, dev, 0, 0x14) };
-        st.ethernet.io_base = (bar1 & 0xFFFC) as u16;
-        st.irq = (unsafe { pci_read32(0, dev, 0, 0x3C) } & 0xFF) as u8;
+        let irq = (unsafe { pci_read32(0, dev, 0, 0x3C) } & 0xFF) as u8;
+        let Some(io) = ferric_i8255x::state::validated_io_bar(bar1, irq) else { continue; };
+        let cmd = unsafe { pci_read32(0, dev, 0, 0x04) } as u16;
+        // Enable I/O only at probe; bus mastering starts after DMA validation.
+        // Zero the upper (W1C PCI status) half of the command dword.
+        if cmd & 1 == 0 {
+            unsafe { pci_write32(0, dev, 0, 0x04, u32::from(cmd | 1)) };
+        }
+        st.ethernet.pci_device = dev;
+        st.ethernet.original_command = cmd;
+        st.ethernet.io_base = io;
+        st.ethernet.irq = irq;
+        st.irq = irq;
         match unsafe { ee_read_mac(st.ethernet.io_base) } {
             Some((mac, width, cksum)) => {
+                st.ethernet.eth_mac = mac;
+                st.ethernet.mac_from_eeprom = true;
                 st.mac = mac;
                 st.mac_eeprom = true;
                 st.ethernet.ee_width = width;
@@ -3782,10 +3793,13 @@ pub unsafe extern "C" fn gate1_net_probe() -> u32 {
                 // Locally administered fallback ("FERRI" in the low
                 // bytes); NTEST's macsrc field reports 0 so a fallback
                 // is never mistaken for a real station address.
-                st.mac = [0x02, 0x46, 0x45, 0x52, 0x52, 0x49];
+                st.ethernet.eth_mac = [0x02, 0x46, 0x45, 0x52, 0x52, 0x49];
+                st.ethernet.mac_from_eeprom = false;
+                st.mac = st.ethernet.eth_mac;
                 st.mac_eeprom = false;
             }
         }
+        st.ethernet.probed = true;
         st.dev_ok = true;
         st.stage = 1;
         return 1;
@@ -3823,6 +3837,10 @@ unsafe fn net_init_failed(st: &mut NetState) -> u32 {
     unsafe {
         outb(st.ethernet.io_base + SCB_CMDHI, 1);
         outl(st.ethernet.io_base + SCB_PORT, 0);
+        // Disable PCI bus mastering as an additional containment measure.
+        let dev = st.ethernet.pci_device;
+        let cmd = pci_read32(0, dev, 0, 0x04) as u16;
+        pci_write32(0, dev, 0, 0x04, u32::from(cmd & !4));
     }
     st.present = false;
     st.ethernet.eth_ready = false;
@@ -3860,7 +3878,7 @@ unsafe fn net_ring_init(st: &mut NetState) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     let st = net_state();
-    if !st.dev_ok {
+    if !st.ethernet.probed || st.wifi_active {
         return 0;
     }
     let io = st.ethernet.io_base;
@@ -3880,6 +3898,9 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     }
     st.ethernet.dma_lin = lin;
     st.ethernet.dma_phys = phys;
+    let dev = st.ethernet.pci_device;
+    let cmd = unsafe { pci_read32(0, dev, 0, 0x04) } as u16;
+    unsafe { pci_write32(0, dev, 0, 0x04, u32::from(cmd | 5)) };
     st.stage = 2;
     for i in 0..NET_DMA_SIZE {
         dma_w8(st.ethernet.dma_lin, i, 0);
