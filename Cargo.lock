@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferric-hw"
+version = "0.1.0"
+
+[[package]]
 name = "ferric-ntfs"
 version = "0.1.0"
 dependencies = [
@@ -27,10 +31,16 @@ dependencies = [
 [[package]]
 name = "ferric-pmu"
 version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
 
 [[package]]
 name = "ferric-sd"
 version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
 
 [[package]]
 name = "ferric-vbe"
@@ -45,6 +55,7 @@ version = "0.1.0"
 dependencies = [
  "abi",
  "ferric-ehci",
+ "ferric-hw",
  "wifi-core",
 ]
 

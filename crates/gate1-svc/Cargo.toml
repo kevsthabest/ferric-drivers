@@ -11,3 +11,4 @@ crate-type = ["rlib", "staticlib"]
 abi = { path = "../abi" }
 wifi-core = { path = "../wifi-core" }
 ferric-ehci = { path = "../ferric-ehci" }
+ferric-hw = { path = "../ferric-hw" }

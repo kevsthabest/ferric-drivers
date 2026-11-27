@@ -58,11 +58,9 @@ pub(crate) unsafe fn inl(_port: u16) -> u32 { 0xFFFF_FFFF }
 pub(crate) unsafe fn outl(_port: u16, _val: u32) {}
 
 pub(crate) unsafe fn pci_read32(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
-    let addr = 0x8000_0000u32
-        | ((bus as u32) << 16)
-        | (((dev & 0x1F) as u32) << 11)
-        | (((func & 0x07) as u32) << 8)
-        | ((reg & 0xFC) as u32);
+    let Some(addr) = ferric_hw::pci_config_address(bus, dev, func, reg & 0xFC) else {
+        return u32::MAX;
+    };
     unsafe {
         outl(0x0CF8, addr);
         inl(0x0CFC)
@@ -70,11 +68,9 @@ pub(crate) unsafe fn pci_read32(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
 }
 
 pub(crate) unsafe fn pci_write32(bus: u8, dev: u8, func: u8, reg: u8, val: u32) {
-    let addr = 0x8000_0000u32
-        | ((bus as u32) << 16)
-        | (((dev & 0x1F) as u32) << 11)
-        | (((func & 0x07) as u32) << 8)
-        | ((reg & 0xFC) as u32);
+    let Some(addr) = ferric_hw::pci_config_address(bus, dev, func, reg & 0xFC) else {
+        return;
+    };
     unsafe {
         outl(0x0CF8, addr);
         outl(0x0CFC, val);
