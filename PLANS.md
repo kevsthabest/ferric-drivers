@@ -62,6 +62,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - CI checkpoint `0ddac4b`: host tests and seven JLM target builds passed.
 - I.2: shared RX/TX descriptor encoding, checked DMA region input, and bounded SCB command submission. Failed bring-up after DMA lock quarantines its DOS allocation until reboot rather than freeing potentially active DMA. Full teardown and retry lifecycle still pending.
 
+- I.2: Ethernet-only DMA/ring/TX/EEPROM state moved into the shared EthernetState struct; packet registration and Wi-Fi state remain in the integrated facade. Lifecycle operations still need extraction.
+
 ## Immediate backlog
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.

@@ -3445,24 +3445,16 @@ struct NetReg {
 }
 
 pub struct NetState {
+    ethernet: ferric_i8255x::state::EthernetState,
     present: bool,
     stage: u8,
     dev_ok: bool,
-    io_base: u16,
     irq: u8,
     mac: [u8; 6],
     mac_eeprom: bool,
-    ee_width: u8,
-    ee_cksum: bool,
-    dma_lin: u32,
-    dma_phys: u32,
     rcv_mode: u8,
     promisc: bool,
     regs: [NetReg; 4],
-    rx_clean: usize,
-    rx_tail: usize,
-    ru_starved: bool,
-    ru_restart: i32,
     svc_rfd: i32,
     svc_phase: u8,
     svc_len: u16,
@@ -3470,8 +3462,6 @@ pub struct NetState {
     svc_buf_seg: u16,
     svc_buf_off: u16,
     svc_budget: u8,
-    tx_busy: bool,
-    tx_len: u16,
     rx_packets: u32,
     rx_bytes: u32,
     rx_errors: u32,
@@ -3480,9 +3470,6 @@ pub struct NetState {
     tx_bytes: u32,
     tx_errors: u32,
     irq_count: u32,
-    last_ack: u8,
-    eth_ready: bool,
-    eth_mac: [u8; 6],
     wifi_mac: [u8; 6],
     wifi_active: bool,
     wifi_rx_buf: [u8; 1600],
@@ -3491,17 +3478,13 @@ pub struct NetState {
 impl NetState {
     const fn new() -> Self {
         Self {
+            ethernet: ferric_i8255x::state::EthernetState::new(),
             present: false,
             stage: 0,
             dev_ok: false,
-            io_base: 0,
             irq: 0,
             mac: [0; 6],
             mac_eeprom: false,
-            ee_width: 0,
-            ee_cksum: false,
-            dma_lin: 0,
-            dma_phys: 0,
             rcv_mode: 3,
             promisc: false,
             regs: [NetReg {
@@ -3510,10 +3493,6 @@ impl NetState {
                 seg: 0,
                 off: 0,
             }; 4],
-            rx_clean: 0,
-            rx_tail: 0,
-            ru_starved: false,
-            ru_restart: -1,
             svc_rfd: -1,
             svc_phase: 0,
             svc_len: 0,
@@ -3521,8 +3500,6 @@ impl NetState {
             svc_buf_seg: 0,
             svc_buf_off: 0,
             svc_budget: 0,
-            tx_busy: false,
-            tx_len: 0,
             rx_packets: 0,
             rx_bytes: 0,
             rx_errors: 0,
@@ -3531,9 +3508,6 @@ impl NetState {
             tx_bytes: 0,
             tx_errors: 0,
             irq_count: 0,
-            last_ack: 0,
-            eth_ready: false,
-            eth_mac: [0; 6],
             wifi_mac: [0; 6],
             wifi_active: false,
             wifi_rx_buf: [0; 1600],
@@ -3576,8 +3550,8 @@ pub(crate) fn net_activate_wifi(mac: [u8; 6]) {
     st.svc_rfd = -1;
     st.svc_phase = 0;
     st.svc_budget = 0;
-    if st.eth_ready {
-        unsafe { outb(st.io_base + SCB_CMDHI, 0x01) }; // mask 82550 IRQ while Wi-Fi is active
+    if st.ethernet.eth_ready {
+        unsafe { outb(st.ethernet.io_base + SCB_CMDHI, 0x01) }; // mask 82550 IRQ while Wi-Fi is active
     }
 }
 
@@ -3586,7 +3560,7 @@ pub(crate) fn net_activate_wifi(mac: [u8; 6]) {
 /// re-arming RU); otherwise mark the facade inactive.
 pub(crate) fn net_deactivate_wifi() {
     let st = net_state();
-    if st.eth_ready {
+    if st.ethernet.eth_ready {
         let _ = gate1_net_switch_backend(0);
     } else {
         st.wifi_active = false;
@@ -3614,31 +3588,31 @@ pub extern "C" fn gate1_net_switch_backend(use_wifi: u32) -> u32 {
     // Registrations deliberately survive the switch in both directions
     // (see net_activate_wifi): only per-backend delivery state resets.
     if use_wifi == 0 {
-        if !st.eth_ready {
+        if !st.ethernet.eth_ready {
             return 0;
         }
         st.wifi_active = false;
         st.present = true;
-        st.mac = st.eth_mac;
+        st.mac = st.ethernet.eth_mac;
         st.svc_rfd = -1;
         st.svc_phase = 0;
         st.svc_budget = 0;
-        st.tx_busy = false;
+        st.ethernet.tx_busy = false;
         // Re-arm 82550 RX ring, unmask device & PIC IRQ line cleanly.
         unsafe {
-            let pending = inb(st.io_base + SCB_ACK);
+            let pending = inb(st.ethernet.io_base + SCB_ACK);
             if pending != 0 && pending != 0xFF {
-                outb(st.io_base + SCB_ACK, pending);
+                outb(st.ethernet.io_base + SCB_ACK, pending);
             }
-            let ru = inb(st.io_base + SCB_STATUS) & 0x3C;
+            let ru = inb(st.ethernet.io_base + SCB_STATUS) & 0x3C;
             if ru != 0x10 {
                 net_ring_init(st);
-                if scb_cmd(st.io_base, st.dma_phys, 0x01).is_err() {
+                if scb_cmd(st.ethernet.io_base, st.ethernet.dma_phys, 0x01).is_err() {
                     st.present = false;
                     return 0;
                 }
             }
-            outb(st.io_base + SCB_CMDHI, 0x00); // unmask 82550 interrupts
+            outb(st.ethernet.io_base + SCB_CMDHI, 0x00); // unmask 82550 interrupts
             if st.irq >= 8 {
                 let mask = inb(0xA1) & !(1u8 << (st.irq - 8));
                 outb(0xA1, mask);
@@ -3654,8 +3628,8 @@ pub extern "C" fn gate1_net_switch_backend(use_wifi: u32) -> u32 {
         if !ath5k::wifi_is_connected() {
             return 0;
         }
-        if st.eth_ready {
-            unsafe { outb(st.io_base + SCB_CMDHI, 0x01) };
+        if st.ethernet.eth_ready {
+            unsafe { outb(st.ethernet.io_base + SCB_CMDHI, 0x01) };
         }
         st.wifi_active = true;
         st.present = true;
@@ -3717,9 +3691,9 @@ unsafe fn scb_cmd(io: u16, gp: u32, cmd: u8) -> Result<(), ferric_i8255x::scb::C
 /// Run the command block built at TXCB_OFF to completion (polled).
 /// Callers zero and fill the block first; EL is always set on it.
 unsafe fn cu_exec(st: &mut NetState) -> bool {
-    let io = st.io_base;
-    let lin = st.dma_lin;
-    if unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) }.is_err() { return false; }
+    let io = st.ethernet.io_base;
+    let lin = st.ethernet.dma_lin;
+    if unsafe { scb_cmd(io, st.ethernet.dma_phys + TXCB_OFF as u32, 0x10) }.is_err() { return false; }
     let start = bios_tick();
     for _ in 0..SCB_POLL_LIMIT {
         if dma_r16(lin, TXCB_OFF + CB_STATUS) & 0x8000 != 0 {
@@ -3734,7 +3708,7 @@ unsafe fn cu_exec(st: &mut NetState) -> bool {
 
 unsafe fn zero_cb(st: &NetState) {
     for i in 0..32 {
-        dma_w8(st.dma_lin, TXCB_OFF + i, 0);
+        dma_w8(st.ethernet.dma_lin, TXCB_OFF + i, 0);
     }
 }
 
@@ -3742,9 +3716,9 @@ unsafe fn net_configure(st: &mut NetState, promisc: bool) -> bool {
     let cfg = ferric_i8255x::configure_bytes(promisc);
     unsafe {
         zero_cb(st);
-        dma_w16(st.dma_lin, TXCB_OFF + CB_CMD, 0x8002); // Configure | EL
+        dma_w16(st.ethernet.dma_lin, TXCB_OFF + CB_CMD, 0x8002); // Configure | EL
         for (i, b) in cfg.iter().enumerate() {
-            dma_w8(st.dma_lin, TXCB_OFF + CB_PARAM + i, *b);
+            dma_w8(st.ethernet.dma_lin, TXCB_OFF + CB_PARAM + i, *b);
         }
         cu_exec(st)
     }
@@ -3795,14 +3769,14 @@ pub unsafe extern "C" fn gate1_net_probe() -> u32 {
             }
         }
         let bar1 = unsafe { pci_read32(0, dev, 0, 0x14) };
-        st.io_base = (bar1 & 0xFFFC) as u16;
+        st.ethernet.io_base = (bar1 & 0xFFFC) as u16;
         st.irq = (unsafe { pci_read32(0, dev, 0, 0x3C) } & 0xFF) as u8;
-        match unsafe { ee_read_mac(st.io_base) } {
+        match unsafe { ee_read_mac(st.ethernet.io_base) } {
             Some((mac, width, cksum)) => {
                 st.mac = mac;
                 st.mac_eeprom = true;
-                st.ee_width = width;
-                st.ee_cksum = cksum;
+                st.ethernet.ee_width = width;
+                st.ethernet.ee_cksum = cksum;
             }
             None => {
                 // Locally administered fallback ("FERRI" in the low
@@ -3847,11 +3821,11 @@ pub unsafe extern "C" fn gate1_net_stub_copy(dest: u32) -> u32 {
 // Return 2 so NETINIT quarantines its allocation instead of freeing live DMA.
 unsafe fn net_init_failed(st: &mut NetState) -> u32 {
     unsafe {
-        outb(st.io_base + SCB_CMDHI, 1);
-        outl(st.io_base + SCB_PORT, 0);
+        outb(st.ethernet.io_base + SCB_CMDHI, 1);
+        outl(st.ethernet.io_base + SCB_PORT, 0);
     }
     st.present = false;
-    st.eth_ready = false;
+    st.ethernet.eth_ready = false;
     2
 }
 
@@ -3859,8 +3833,8 @@ unsafe fn net_init_failed(st: &mut NetState) -> u32 {
 /// Build the receive ring in the DMA block (shared by bring-up and
 /// the packet driver's reset_interface).
 unsafe fn net_ring_init(st: &mut NetState) {
-    let lin = st.dma_lin;
-    let Some(region) = DmaRegion::new(st.dma_phys, lin) else { return; };
+    let lin = st.ethernet.dma_lin;
+    let Some(region) = DmaRegion::new(st.ethernet.dma_phys, lin) else { return; };
     for i in 0..RFD_COUNT {
         let off = i * RFD_STRIDE;
         let Some(desc) = receive_descriptor(region, i) else { return; };
@@ -3871,12 +3845,12 @@ unsafe fn net_ring_init(st: &mut NetState) {
         dma_w16(lin, off + RFD_ACTUAL, 0);
         dma_w16(lin, off + RFD_SIZE, desc.size);
     }
-    st.rx_clean = 0;
-    st.rx_tail = RFD_COUNT - 1;
+    st.ethernet.rx_clean = 0;
+    st.ethernet.rx_tail = RFD_COUNT - 1;
     st.svc_rfd = -1;
     st.svc_phase = 0;
-    st.ru_restart = -1;
-    st.ru_starved = false;
+    st.ethernet.ru_restart = -1;
+    st.ethernet.ru_starved = false;
 }
 
 /// Full device bring-up against the DOS DMA block NETINIT allocated.
@@ -3889,8 +3863,8 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     if !st.dev_ok {
         return 0;
     }
-    let io = st.io_base;
-    if dma_seg == 0 || dma_seg > 0xFFFF || st.dma_lin != 0 {
+    let io = st.ethernet.io_base;
+    if dma_seg == 0 || dma_seg > 0xFFFF || st.ethernet.dma_lin != 0 {
         return 0;
     }
     let lin = dma_seg << 4;
@@ -3904,11 +3878,11 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
         unsafe { vdmad_unlock_dma_region(lin, NET_DMA_SIZE as u32) };
         return 0;
     }
-    st.dma_lin = lin;
-    st.dma_phys = phys;
+    st.ethernet.dma_lin = lin;
+    st.ethernet.dma_phys = phys;
     st.stage = 2;
     for i in 0..NET_DMA_SIZE {
-        dma_w8(st.dma_lin, i, 0);
+        dma_w8(st.ethernet.dma_lin, i, 0);
     }
     unsafe {
         // Software reset, then let the SCB settle.
@@ -3926,9 +3900,9 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     st.stage = 3;
     unsafe {
         zero_cb(st);
-        dma_w16(st.dma_lin, TXCB_OFF + CB_CMD, 0x8001); // IA setup | EL
+        dma_w16(st.ethernet.dma_lin, TXCB_OFF + CB_CMD, 0x8001); // IA setup | EL
         for i in 0..6 {
-            dma_w8(st.dma_lin, TXCB_OFF + CB_PARAM + i, st.mac[i]);
+            dma_w8(st.ethernet.dma_lin, TXCB_OFF + CB_PARAM + i, st.mac[i]);
         }
         if !cu_exec(st) {
             return net_init_failed(st);
@@ -3937,11 +3911,11 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
     st.stage = 4;
     unsafe {
         // Statistics dump target (counters read on demand later).
-        if scb_cmd(io, st.dma_phys + STATS_OFF as u32, 0x40).is_err() {
+        if scb_cmd(io, st.ethernet.dma_phys + STATS_OFF as u32, 0x40).is_err() {
             return net_init_failed(st);
         }
         net_ring_init(st);
-        if scb_cmd(io, st.dma_phys, 0x01).is_err() {
+        if scb_cmd(io, st.ethernet.dma_phys, 0x01).is_err() {
             return net_init_failed(st);
         }
     }
@@ -3971,8 +3945,8 @@ pub unsafe extern "C" fn gate1_net_init(dma_seg: u32) -> u32 {
         }
     }
     st.present = true;
-    st.eth_ready = true;
-    st.eth_mac = st.mac;
+    st.ethernet.eth_ready = true;
+    st.ethernet.eth_mac = st.mac;
     st.stage = 6;
     1
 }
@@ -4017,21 +3991,21 @@ pub unsafe extern "C" fn gate1_net_service() -> u32 {
         }
         return 0;
     }
-    let io = st.io_base;
+    let io = st.ethernet.io_base;
     let ack = unsafe { inb(io + SCB_ACK) };
-    st.last_ack = ack;
+    st.ethernet.last_ack = ack;
     if ack == 0 || ack == 0xFF {
         return 0;
     }
     unsafe { outb(io + SCB_ACK, ack) };
     st.irq_count += 1;
-    if ack & (ACK_CX | ACK_CNA) != 0 && st.tx_busy {
-        let status = dma_r16(st.dma_lin, TXCB_OFF + CB_STATUS);
+    if ack & (ACK_CX | ACK_CNA) != 0 && st.ethernet.tx_busy {
+        let status = dma_r16(st.ethernet.dma_lin, TXCB_OFF + CB_STATUS);
         if status & 0x8000 != 0 {
-            st.tx_busy = false;
+            st.ethernet.tx_busy = false;
             if status & 0x2000 != 0 {
                 st.tx_packets += 1;
-                st.tx_bytes += st.tx_len as u32;
+                st.tx_bytes += st.ethernet.tx_len as u32;
             } else {
                 st.tx_errors += 1;
             }
@@ -4041,7 +4015,7 @@ pub unsafe extern "C" fn gate1_net_service() -> u32 {
         st.svc_budget = RFD_COUNT as u8;
     }
     if ack & ACK_RNR != 0 {
-        st.ru_starved = true;
+        st.ethernet.ru_starved = true;
     }
     1
 }
@@ -4050,36 +4024,36 @@ pub unsafe extern "C" fn gate1_net_service() -> u32 {
 /// it becomes the tail of the available list. The new EL is set before
 /// the old one is cleared, so the list never exists without an end.
 unsafe fn net_recycle_rfd(st: &mut NetState, idx: usize) {
-    let lin = st.dma_lin;
+    let lin = st.ethernet.dma_lin;
     let off = idx * RFD_STRIDE;
     dma_w16(lin, off + RFD_STATUS, 0);
     dma_w16(lin, off + RFD_ACTUAL, 0);
     dma_w16(lin, off + RFD_SIZE, FRAME_BUF as u16);
     dma_w16(lin, off + RFD_CMD, 0x8000);
-    if st.rx_tail != idx {
-        let toff = st.rx_tail * RFD_STRIDE;
+    if st.ethernet.rx_tail != idx {
+        let toff = st.ethernet.rx_tail * RFD_STRIDE;
         dma_w16(lin, toff + RFD_CMD, 0);
     }
-    st.rx_tail = idx;
-    if st.ru_starved && st.ru_restart < 0 {
-        st.ru_restart = idx as i32;
+    st.ethernet.rx_tail = idx;
+    if st.ethernet.ru_starved && st.ethernet.ru_restart < 0 {
+        st.ethernet.ru_restart = idx as i32;
     }
 }
 
 /// If the RU stopped for lack of buffers and the drain has since
 /// recycled some, restart it at the oldest recycled descriptor.
 unsafe fn net_maybe_restart_ru(st: &mut NetState) {
-    if !st.ru_starved {
+    if !st.ethernet.ru_starved {
         return;
     }
-    let io = st.io_base;
+    let io = st.ethernet.io_base;
     let ru = unsafe { inb(io + SCB_STATUS) } & 0x3C;
-    if ru == 0x08 && st.ru_restart >= 0 {
-        let gp = st.dma_phys + (st.ru_restart as usize * RFD_STRIDE) as u32;
+    if ru == 0x08 && st.ethernet.ru_restart >= 0 {
+        let gp = st.ethernet.dma_phys + (st.ethernet.ru_restart as usize * RFD_STRIDE) as u32;
         if unsafe { scb_cmd(io, gp, 0x01) }.is_err() { return; }
-        st.ru_restart = -1;
+        st.ethernet.ru_restart = -1;
     }
-    st.ru_starved = false;
+    st.ethernet.ru_starved = false;
 }
 
 /// Upcall sequencer for the INT 73h stub loop. Fills `out` —
@@ -4152,8 +4126,8 @@ pub unsafe extern "C" fn gate1_net_upcall_next(out: *mut u32) -> u32 {
             o[7] = 0;
             return 1;
         }
-        let idx = st.rx_clean;
-        let lin = st.dma_lin;
+        let idx = st.ethernet.rx_clean;
+        let lin = st.ethernet.dma_lin;
         let off = idx * RFD_STRIDE;
         let status = dma_r16(lin, off + RFD_STATUS);
         if status & 0x8000 == 0 {
@@ -4181,7 +4155,7 @@ pub unsafe extern "C" fn gate1_net_upcall_next(out: *mut u32) -> u32 {
                 st.rx_errors += 1;
             }
             unsafe { net_recycle_rfd(st, idx) };
-            st.rx_clean = (idx + 1) % RFD_COUNT;
+            st.ethernet.rx_clean = (idx + 1) % RFD_COUNT;
             st.svc_budget -= 1;
             continue;
         }
@@ -4223,7 +4197,7 @@ pub unsafe extern "C" fn gate1_net_upcall_after(out: *mut u32) {
             st.rx_dropped += 1;
             if !st.wifi_active {
                 unsafe { net_recycle_rfd(st, idx) };
-                st.rx_clean = (idx + 1) % RFD_COUNT;
+                st.ethernet.rx_clean = (idx + 1) % RFD_COUNT;
             }
             st.svc_rfd = -1;
             st.svc_budget = st.svc_budget.saturating_sub(1);
@@ -4238,7 +4212,7 @@ pub unsafe extern "C" fn gate1_net_upcall_after(out: *mut u32) {
                 core::ptr::copy_nonoverlapping(st.wifi_rx_buf.as_ptr(), dst as *mut u8, n);
             }
         } else {
-            let src = st.dma_lin as usize + idx * RFD_STRIDE + RFD_HDR;
+            let src = st.ethernet.dma_lin as usize + idx * RFD_STRIDE + RFD_HDR;
             unsafe {
                 core::ptr::copy_nonoverlapping(src as *const u8, dst as *mut u8, n);
             }
@@ -4250,7 +4224,7 @@ pub unsafe extern "C" fn gate1_net_upcall_after(out: *mut u32) {
         if !st.wifi_active {
             let idx = st.svc_rfd as usize;
             unsafe { net_recycle_rfd(st, idx) };
-            st.rx_clean = (idx + 1) % RFD_COUNT;
+            st.ethernet.rx_clean = (idx + 1) % RFD_COUNT;
         }
         st.svc_rfd = -1;
         st.svc_phase = 0;
@@ -4283,15 +4257,15 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
         st.tx_errors += 1;
         return false;
     }
-    if st.tx_busy {
+    if st.ethernet.tx_busy {
         let start = bios_tick();
         loop {
-            let status = dma_r16(st.dma_lin, TXCB_OFF + CB_STATUS);
+            let status = dma_r16(st.ethernet.dma_lin, TXCB_OFF + CB_STATUS);
             if status & 0x8000 != 0 {
-                st.tx_busy = false;
+                st.ethernet.tx_busy = false;
                 if status & 0x2000 != 0 {
                     st.tx_packets += 1;
-                    st.tx_bytes += st.tx_len as u32;
+                    st.tx_bytes += st.ethernet.tx_len as u32;
                 } else {
                     st.tx_errors += 1;
                 }
@@ -4302,8 +4276,8 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
             }
         }
     }
-    let lin = st.dma_lin;
-    let Some(region) = DmaRegion::new(st.dma_phys, lin) else { return false; };
+    let lin = st.ethernet.dma_lin;
+    let Some(region) = DmaRegion::new(st.ethernet.dma_phys, lin) else { return false; };
     let Some(desc) = transmit_descriptor(region, len) else { return false; };
     let wire_len = usize::from(desc.wire_len);
     unsafe {
@@ -4327,9 +4301,9 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
         dma_w32(lin, TXCB_OFF + TBD_ADDR, desc.buffer);
         dma_w32(lin, TXCB_OFF + TBD_LEN, u32::from(desc.wire_len));
     }
-    st.tx_busy = true;
-    st.tx_len = wire_len as u16;
-    let io = st.io_base;
+    st.ethernet.tx_busy = true;
+    st.ethernet.tx_len = wire_len as u16;
+    let io = st.ethernet.io_base;
     // Because every TX CB sets EL (never S), the CU always returns to Idle
     // (0x00) on completion. Wait briefly for Idle and always CUC_START.
     let start = bios_tick();
@@ -4338,9 +4312,9 @@ unsafe fn net_send(st: &mut NetState, src_lin: u32, len: usize) -> bool {
             break;
         }
     }
-    match unsafe { scb_cmd(io, st.dma_phys + TXCB_OFF as u32, 0x10) } {
+    match unsafe { scb_cmd(io, st.ethernet.dma_phys + TXCB_OFF as u32, 0x10) } {
         Ok(()) => true,
-        Err(ferric_i8255x::scb::CommandError::Busy) => { st.tx_busy = false; false }
+        Err(ferric_i8255x::scb::CommandError::Busy) => { st.ethernet.tx_busy = false; false }
         // A submitted command may still complete; retain the TX buffer.
         Err(ferric_i8255x::scb::CommandError::AcceptanceUnknown) => false,
     }
@@ -4492,7 +4466,7 @@ pub unsafe extern "C" fn gate1_net_api(client: *mut u32) -> u32 {
             if !st.wifi_active {
                 unsafe {
                     net_ring_init(st);
-                    if scb_cmd(st.io_base, st.dma_phys, 0x01).is_err() {
+                    if scb_cmd(st.ethernet.io_base, st.ethernet.dma_phys, 0x01).is_err() {
                         net_err(c, ERR_CANT_SEND);
                         return 0;
                     }
@@ -4532,7 +4506,7 @@ pub unsafe extern "C" fn gate1_net_api(client: *mut u32) -> u32 {
             }
             let want_promisc = mode == 6;
             if !st.wifi_active && want_promisc != st.promisc {
-                if st.tx_busy {
+                if st.ethernet.tx_busy {
                     net_err(c, ERR_CANT_SET);
                     return 1;
                 }
@@ -4587,15 +4561,15 @@ pub unsafe extern "C" fn gate1_net_api(client: *mut u32) -> u32 {
             // CX = IRQ (low byte) | link<<8 | mac-from-EEPROM<<9 |
             // EEPROM address width<<10 | checksum-valid<<13,
             // DX = IRQ service count (low word).
-            let link = st.present && (st.wifi_active || unsafe { link_is_up(st.io_base) });
+            let link = st.present && (st.wifi_active || unsafe { link_is_up(st.ethernet.io_base) });
             c[CR_EAX] = (c[CR_EAX] & 0xFFFF_0000) | st.stage as u32;
-            c[CR_EBX] = (c[CR_EBX] & 0xFFFF_0000) | st.io_base as u32;
+            c[CR_EBX] = (c[CR_EBX] & 0xFFFF_0000) | st.ethernet.io_base as u32;
             c[CR_ECX] = (c[CR_ECX] & 0xFFFF_0000)
                 | (st.irq as u32)
                 | ((link as u32) << 8)
                 | ((st.mac_eeprom as u32) << 9)
-                | ((st.ee_width as u32) << 10)
-                | ((st.ee_cksum as u32) << 13);
+                | ((st.ethernet.ee_width as u32) << 10)
+                | ((st.ethernet.ee_cksum as u32) << 13);
             c[CR_EDX] = (c[CR_EDX] & 0xFFFF_0000) | (st.irq_count & 0xFFFF);
             net_ok(c);
         }
