@@ -136,5 +136,20 @@ def main():
         ("clean shutdown", "ATHDIAG: stop=0" in s),
     ])
 
+    run(base, output, "wireless-batch", [
+        "CALL WIFIGATE.BAT",
+        "TYPE WIFIGATE.TXT > COM1",
+        "TYPE CBPRE.TXT > COM1",
+        "TYPE CBPOST.TXT > COM1",
+        "NTEST > COM1",
+    ], False, lambda s: [
+        ("batch loaded resident once", s.count("ATHDIAG: resident=0") == 1),
+        ("batch unloaded resident", s.count("ATHDIAG: resident=9") == 1),
+        ("both PCI snapshots", s.count("CBPROBE: bridges=0") == 2),
+        ("scan and install rejected", "ATHSCAN: status=5" in s and "ATHINIT: status=5" in s),
+        ("no packet driver", "NTEST: found=0" in s),
+        ("shutdown", "ATHSTOP: status=0" in s),
+    ])
+
 if __name__ == "__main__":
     main()
