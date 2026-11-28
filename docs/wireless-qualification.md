@@ -50,3 +50,6 @@ Gate A package is diagnostic only: extract the CI artifact, copy FRES.JLM, CARDB
 ## Baseline capture package
 
 Also copy CBPROBE.COM. WIFIGATE.BAT now saves CBPRE.TXT before loading any modules, CBPOST.TXT after unloading and WIFIGATE.TXT for the intermediate status. The CBPROBE bus field now reads configuration offset 18h (not 14h) and the configuration address latch is restored after each read with interrupt flags preserved. Compare raw dwords, especially command, BAR, bus/window and bridge control. Volatile status/card-detect fields can change independently; any unexplained configuration difference blocks activation. The actual batch is exercised in QEMU with absent hardware. No physical aperture-size probing or activation is performed.
+
+## Physical Gate A result (2026-11-28)
+Both 256-byte ToPIC95 configuration snapshots match before/after. Slot 0 audit=0, slot 1 audit=4 (expected bus conflict), probe/scan/install=5, stop=0, resident=9 after unload. This qualifies only the observed discovery/unload configuration. Gate B remains blocked: root windows and occupied aperture lengths are not independently established. A pure slot-0 authorization validator now checks complete evidence, root containment, occupied range overlap and bus conflicts; it is not wired to activation. No fabricated range or BIOS E820 hole is sufficient authorization.
