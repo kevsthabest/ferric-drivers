@@ -9,3 +9,7 @@ The shared RegisterIo interface now owns bounded MAC wake, reset and EEPROM read
 ## RF initialization
 
 The radio module shares the register table upload, EEPROM checksum/calibration, RF gain and bias setup, channel programming, ADC/AGC calibration, and receive filter setup. The generated table source moves into ferric-ath5k with a compatibility re-export. Legacy error diagnostics are retained. The radio delay calls preserve legacy behavior and do not yet propagate timer failure. CI pending.
+
+## DMA ring geometry
+
+Shared 16 KiB layout, checked linear/physical region and RX descriptor generation replace legacy ring arithmetic. The integrated adapter retains its existing DMA locking and stop behavior; standalone DMA ownership and shutdown are not yet implemented. Test-only descriptor constants now import from the shared library to resolve host/target lint differences.

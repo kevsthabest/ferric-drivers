@@ -102,6 +102,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: fixed CI dead-code failure from stale bitswap helper; extracted wake/reset/EEPROM register transactions behind shared RegisterIo, with timeout and absent-hardware tests. Target CI pending.
 
+- I.3: shared AR2413 DMA geometry and RX ring descriptor generation. Fixed host/target CI discrepancy by exposing test-only constants from shared crate and importing only under cfg(test). Combined CI pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

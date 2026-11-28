@@ -5,6 +5,9 @@
 //! Strictly `#![no_std]`, 386-pure, and read-only with respect to storage.
 
 use core::cell::UnsafeCell;
+use ferric_ath5k::dma::{WIFI_DMA_SIZE,RX_DESC_COUNT,RX_DESC_STRIDE,RX_BUF_BASE,RX_BUF_SIZE,TX_DESC_OFF,TX_BUF_OFF};
+#[cfg(test)]
+use ferric_ath5k::{AR5K_RX_STAT1_OK,AR5K_4W_TX_DESC_CTL0_FRAME_LEN,AR5K_4W_TX_DESC_CTL0_XMIT_POWER,AR5K_4W_TX_DESC_CTL0_XMIT_POWER_S,AR5K_4W_TX_DESC_CTL0_CLRDMASK,AR5K_4W_TX_DESC_CTL0_ENCRYPT_KEY_VALID,AR5K_4W_TX_DESC_CTL1_BUF_LEN,AR5K_4W_TX_DESC_CTL1_ENCRYPT_KEY_IDX,AR5K_4W_TX_DESC_CTL1_ENCRYPT_KEY_IDX_S,AR5K_4W_TX_DESC_CTL1_NOACK,AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0,AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0_S,AR5K_4W_TX_DESC_CTL3_XMIT_RATE0};
 
 use crate::{
     bios_tick, cardbus, inb, net_activate_wifi, net_deactivate_wifi, outb,
@@ -589,11 +592,6 @@ pub unsafe extern "C" fn gate1_wifi_probe(dst_lin: u32) -> u32 {
 // RX DMA descriptor ring, and passive beacon scan via `wifi-core`.
 // ---------------------------------------------------------------------
 
-const WIFI_DMA_SIZE: usize = 16384; // 16 KiB (1024 DOS paragraphs)
-const RX_DESC_COUNT: usize = 8;
-const RX_DESC_STRIDE: usize = 64;
-const RX_BUF_BASE: usize = 0x0400; // 1 KiB-aligned after RX (0x000..0x200) + TX (0x300) descs
-const RX_BUF_SIZE: usize = 1600; // 8 * 1600 = 0x3200 -> 0x0400..0x3600 (before TX_BUF 0x3800)
 
 
 /// Compute `(rf_buf_lo, rf_buf_hi)` for RF5112/RF2413 2.4 GHz channels 1..=13
@@ -717,19 +715,9 @@ unsafe fn stop_rx_dma(base: u32) {
     }
 }
 
-unsafe fn init_rx_ring(dma_lin: u32, dma_phys: u32) {
-    for i in 0..RX_DESC_COUNT {
-        let doff = i * RX_DESC_STRIDE;
-        let next_phys = dma_phys + (((i + 1) % RX_DESC_COUNT) * RX_DESC_STRIDE) as u32;
-        let buf_phys = dma_phys + (RX_BUF_BASE + i * RX_BUF_SIZE) as u32;
-        unsafe {
-            dma_w32(dma_lin, doff + 0, next_phys); // ds_link
-            dma_w32(dma_lin, doff + 4, buf_phys); // ds_data
-            dma_w32(dma_lin, doff + 8, 0); // rx_control_0
-            dma_w32(dma_lin, doff + 12, RX_BUF_SIZE as u32); // rx_control_1
-            dma_w32(dma_lin, doff + 16, 0); // rx_status_0
-            dma_w32(dma_lin, doff + 20, 0); // rx_status_1
-        }
+unsafe fn init_rx_ring(dma_lin:u32,dma_phys:u32) {
+    if let Some(region)=ferric_ath5k::dma::Region::new(dma_lin,dma_phys) {
+        ferric_ath5k::dma::initialize_rx(region,|off,val|unsafe{dma_w32(dma_lin,off,val)});
     }
 }
 
@@ -1311,8 +1299,6 @@ pub(crate) unsafe fn ar2413_ack_irq(base: u32) -> u32 {
 // Gate 4b.5 / 4b.6 — WPA2-PSK Connect + INT 60h Wi-Fi Data Path
 // ---------------------------------------------------------------------
 
-const TX_DESC_OFF: usize = 0x0300;
-const TX_BUF_OFF: usize = 0x3800; // 2 KiB after the 8 RX buffers (0x0400..0x3600)
 const AR5K_TSF_L32: usize = 0x804C;
 
 /// Fixed 160-byte `#[repr(C)]` request/response struct shared with `WCONN.COM`
