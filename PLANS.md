@@ -94,6 +94,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `980afef` passed host/target and Ethernet QEMU. CardBus now models the captured unassigned-but-enabled DynaBook bridge with explicit profile capture, disables decoding before reprogramming, and permits PWRCYCLE to clear after confirmed stabilization/reset release. Added regression tests. Activation remains unexported.
 
+- I.3: shared AR2413 child enumeration and reversible memory-only PCI configuration; refuses unsupported/active cards and keeps DMA disabled. Resident child claim and handoff wiring pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

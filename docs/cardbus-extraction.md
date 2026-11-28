@@ -49,3 +49,7 @@ V86 AX=000A, BX=slot returns an audit result: 0=no detected PCI conflict, firmwa
 ## BIOS reconciliation
 
 The specific pre-CBINIT capture (command 0007, BAR/windows zero, bus 3/4, rev 32, IRQ FF) can now be captured by the DynaBook-only snapshot path. Generic capture still rejects active decoding. Stage first disables I/O/memory/master and verifies readback; restore verifies windows before restoring the saved command. Power startup still requires PWRCYCLE during stabilization but does not require it to persist after reset release; the final recorded state 30000820 is accepted only with 3.3 V selection readback and valid card presence/type. This does not establish resource authorization or physical qualification.
+
+## Child enumeration
+
+The shared child layer recognizes only AR2413 (168C:001A, network class, type-0 single-function header), checks a 64 KiB aligned aperture inside the bridge window, and rejects preassigned BARs or active decode/mastering. Its reversible configuration enables memory decoding only; bus mastering remains the future Atheros DMA owner's responsibility after locked descriptors and quiescence checks. The adapter must acquire a child PCI claim before prepare, retain the returned snapshot even if verify fails, and release only after restoration. This layer is host-testable and not yet invoked by the resident provider.
