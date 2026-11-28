@@ -7,6 +7,10 @@ name = "abi"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-cardbus"
+version = "0.1.0"
+
+[[package]]
 name = "ferric-ehci"
 version = "0.1.0"
 
@@ -72,6 +76,7 @@ dependencies = [
 name = "gate1-svc"
 version = "0.1.0"
 dependencies = [
+ "ferric-cardbus",
  "abi",
  "ferric-ehci",
  "ferric-hw",

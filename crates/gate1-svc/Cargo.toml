@@ -8,6 +8,7 @@ license.workspace = true
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
+ferric-cardbus = { path = "../ferric-cardbus" }
 abi = { path = "../abi" }
 wifi-core = { path = "../wifi-core" }
 ferric-ehci = { path = "../ferric-ehci" }

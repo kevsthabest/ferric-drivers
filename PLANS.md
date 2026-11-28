@@ -73,6 +73,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `96f519d`: host tests and all eight target builds passed; QEMU harness stopped before boot because upstream source archive contains two boot.asm files. Select boot/boot.asm explicitly. No emulator result yet. Artifacts uploaded in run 46086383312.
 
+- I.3: extracted ToPIC95 slot profile, socket decoding and 40-byte ABI into ferric-cardbus; invalid slot indices rejected. [CardBus extraction gates](docs/cardbus-extraction.md). No standalone bridge yet.
+
 ## Immediate backlog
 - Ethernet: rerun QEMU smoke after archive selection fix; verify real packet exchange and lifecycle before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

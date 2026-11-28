@@ -18,6 +18,10 @@ WPA2 supplicant, and no DOS implementation of any of that existed.
   request record and zeroed after the connect call; nothing
   persists credentials anywhere.
 
+## Stage I.3 modularization
+
+The shared `ferric-cardbus` library holds the slot resource profile, socket decoding and stable slot information ABI. Hardware ownership and bridge lifecycle remain in the integrated core. See [extraction gates](../cardbus-extraction.md); existing evidence applies to the legacy integrated driver only.
+
 ## Pieces
 
 - **Bridge driver** — `crates/gate1-svc/src/cardbus.rs`: ToPIC95
