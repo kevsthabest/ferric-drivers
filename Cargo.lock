@@ -7,6 +7,14 @@ name = "abi"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-ath-provider"
+version = "0.1.0"
+dependencies = [
+ "ferric-ath5k",
+ "ferric-cardbus",
+]
+
+[[package]]
 name = "ferric-ath5k"
 version = "0.1.0"
 

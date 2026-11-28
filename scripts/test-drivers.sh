@@ -35,6 +35,9 @@ for crate in ferric-pmu ferric-sd ferric-res; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "ferric_hw=$tmp/libferric_hw.rlib"
 done
+test_crate ferric_ath_provider crates/ferric-ath-provider/src/lib.rs \
+    --extern "ferric_ath5k=$tmp/libferric_ath5k.rlib" \
+    --extern "ferric_cardbus=$tmp/libferric_cardbus.rlib"
 test_crate ferric_cb_provider crates/ferric-cb-provider/src/lib.rs \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \
     --extern "ferric_cardbus=$tmp/libferric_cardbus.rlib"

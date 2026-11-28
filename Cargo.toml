@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/abi", "crates/gate1-svc", "crates/wifi-core", "crates/ferric-ntfs", "crates/ferric-exfat", "crates/ferric-vbe", "crates/ferric-ehci", "crates/ferric-pmu", "crates/ferric-sd", "crates/ferric-hw", "crates/ferric-res", "crates/ferric-i8255x", "crates/ferric-ethernet", "crates/ferric-cardbus", "crates/ferric-cb-provider", "crates/ferric-ath5k"]
+members = ["crates/abi", "crates/gate1-svc", "crates/wifi-core", "crates/ferric-ntfs", "crates/ferric-exfat", "crates/ferric-vbe", "crates/ferric-ehci", "crates/ferric-pmu", "crates/ferric-sd", "crates/ferric-hw", "crates/ferric-res", "crates/ferric-i8255x", "crates/ferric-ethernet", "crates/ferric-cardbus", "crates/ferric-cb-provider", "crates/ferric-ath5k", "crates/ferric-ath-provider"]
 
 [workspace.package]
 edition = "2024"

@@ -21,3 +21,7 @@ Shared bounded RX stop, TX idle wait and TX queue stop return explicit absent/ti
 ## DMA lifetime contract
 
 The standalone-oriented DmaPlatform/Lease state machine requires isolation before lock, checked DOS memory range, descriptor preparation before enable, and verified stop plus isolation before unlock. Failure keeps the lock until successful retry. The provider adds ring-0 service 4 `dma_master(slot,consumer,enable)` with owner checks and verified PCI command bits on both bridge and AR2413. PCI readback alone is not a DMA drain guarantee; the future resident platform must implement the drain contract. Existing integrated scan/disconnect paths have not been migrated.
+
+## Resident module checkpoint
+
+Experimental ATH5K.JLM (FD0A) is now in the aggregate build. It checks FRES and CardBus ABI/service counts, rejects integrated FERRIC, registers its broker identity, queries and borrows only a powered AR2413, verifies mastering disabled, maps 64 KiB and retains ownership on cleanup failure. V86 AX=0A BX=slot requests a mapping-only probe; AX=0D releases it, status 0 success. CardBus discovery-only currently returns no eligible child, so this is not a working Wi-Fi driver. No DMA start, MAC probe, scan, connection or packet facade is exported yet. Provider services are rechecked at each call. CI pending.
