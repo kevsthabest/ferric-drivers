@@ -4,7 +4,7 @@
 use crate::audit::PciRead;
 use crate::resources::Range;
 pub const AGP:Range=Range{base:0xf0000000,len:0x04000000};
-pub const GRAPHICS:Range=Range{base:0xf7f00000,len:0x06300000};
+pub const GRAPHICS:Range=Range{base:0xf7f00000,len:0x06100000};
 const EXPECTED:&[(u8,u8,u8,u8,u32)]=&[
  (0,0,0,0,0x164410b9),(0,0,0,0x10,0xf0000008),(0,0,0,0xbc,8),
  (0,1,0,0,0x524710b9),(0,1,0,0x18,0x00010100),(0,1,0,0x20,0xfdf0f7f0),
@@ -36,6 +36,7 @@ mod tests{
   assert!(!matches_capture(&mut Mock{change:true}));
  }
  #[test]fn known_windows_disjoint(){
+  assert_eq!(u64::from(GRAPHICS.base)+u64::from(GRAPHICS.len)-1,0xfdffffff);
   let r=crate::resources::validate(crate::slot_resources(0).unwrap(),&[AGP,GRAPHICS],&[]).unwrap();
   assert_eq!(r[1].len,0x100000);
  }

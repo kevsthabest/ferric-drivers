@@ -109,18 +109,23 @@ pub extern "C" fn cb_audit(slot:u32)->u32{
 /// as a Jemm service yet; no path from DOS can activate it in this revision.
 #[unsafe(no_mangle)]
 pub extern "C" fn cb_start_audited(slot:u32)->u32 {
-    if slot>=2{return 1;}
+    if slot!=0{return 1;}
+    if slots()[0].is_some(){return 2;}
     if cb_audit(slot)!=0{return 5;}
+    if !ferric_cardbus::dynabook::matches_capture(&mut AuditPci){return 5;}
     // Read-only PCI audit does not authorize any physical address range.
     // This gate must not be bypassed by a future V86 wrapper.
-    const FIRMWARE_AUTHORIZED:bool=false;
-    if !FIRMWARE_AUTHORIZED{return 6;}
+    const EVIDENCE:ferric_cardbus::authorization::Evidence<'static>=ferric_cardbus::authorization::Evidence{
+        root_windows:&[],occupied:&[ferric_cardbus::dynabook::AGP,ferric_cardbus::dynabook::GRAPHICS],
+        occupied_buses:&[1,3,4],complete:false,
+    };
+    let Some(r)=ferric_cardbus::slot_resources(0)else{return 1;};
+    if ferric_cardbus::authorization::check(0,r,&EVIDENCE).is_err(){return 6;}
     // A PCI-only scan is insufficient; platform firmware authorization remains absent.
     let cell=&mut slots()[slot as usize];if cell.is_some(){return 2;}
     let info=discover(slot,|f,o|unsafe{read32(0,TOPIC95_PCI_DEV,f,o)});
     if info.present==0{return 1;}
-    let Some(r)=ferric_cardbus::slot_resources(slot as usize) else{return 1;};
-    let Ok(session)=Session::new(slot as u8,r,&[],&[]) else{return 1;};
+    let Ok(session)=Session::new(slot as u8,r,EVIDENCE.occupied,EVIDENCE.occupied_buses) else{return 1;};
     let mut a=Active{session,hw:Hardware::new(slot as u8,r)};
     let result=a.session.start(&mut a.hw,info.rev);
     if a.session.is_held(){*cell=Some(a);}

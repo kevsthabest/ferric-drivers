@@ -81,3 +81,60 @@ impl Session {
     pub fn is_held(&self)->bool{self.lease.is_held()}
     pub fn consumer_is(&self,id:u16)->bool{self.ready&&self.lease.consumer_is(id)}
 }
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ use crate::{lifecycle::Claim, CB_CBCARD,CB_3VCARD,CB_PWRCYCLE};
+ struct Mock{cfg:[u32;64],claims:u8,ctrl:u32,reset:bool,mapped:bool,child:bool,fail_open:bool,fail_child:bool,fail_close:bool}
+ impl Broker for Mock{
+  fn claim(&mut self,_:Claim)->bool{self.claims+=1;true}
+  fn release(&mut self,_:Claim)->bool{assert!(!self.mapped&&!self.child);self.claims-=1;true}
+ }
+ impl ConfigIo for Mock{
+  fn read(&mut self,o:u8)->u32{self.cfg[o as usize/4]}
+  fn write(&mut self,o:u8,v:u32){self.cfg[o as usize/4]=v;}
+ }
+ impl SocketIo for Mock{
+  fn state(&mut self)->u32{CB_CBCARD|CB_3VCARD|CB_PWRCYCLE}
+  fn control(&mut self)->u32{self.ctrl}
+  fn set_control(&mut self,v:u32){self.ctrl=v;}
+  fn set_reset(&mut self,v:bool)->bool{self.reset=v;true}
+  fn mask_events(&mut self){}
+  fn clear_events(&mut self){}
+  fn disable_exca_power(&mut self){}
+  fn force(&mut self,_:u32){}
+  fn delay_ms(&mut self,_:u32)->bool{true}
+ }
+ impl Platform for Mock{
+  fn open_socket(&mut self,_:u32)->bool{assert_eq!(self.claims,4);self.mapped=true;!self.fail_open}
+  fn close_socket(&mut self)->bool{if self.fail_close{return false;}self.mapped=false;true}
+  fn child_idle(&mut self)->bool{true}
+  fn prepare_child(&mut self)->bool{self.child=true;!self.fail_child}
+  fn release_child(&mut self)->bool{self.child=false;true}
+ }
+ fn fixture()->Mock{
+  let mut m=Mock{cfg:[0;64],claims:0,ctrl:0,reset:false,mapped:false,child:false,fail_open:false,fail_child:false,fail_close:false};
+  m.cfg[0]=0x06171179;m.cfg[1]=7;m.cfg[2]=0x06070032;m.cfg[6]=0x00030300;m.cfg[15]=0x1ff;m
+ }
+ fn session()->Session{Session::new(0,crate::slot_resources(0).unwrap(),&[],&[]).unwrap()}
+ #[test]fn successful_session_and_consumer_pin(){
+  let mut m=fixture();let initial=m.cfg;let mut s=session();
+  assert!(s.start(&mut m,0x32).is_ok());assert!(m.mapped&&m.child);
+  s.attach(0xfd0a).unwrap();assert_eq!(s.stop(&mut m),Err(Error::Consumer));
+  s.detach(0xfd0a).unwrap();s.stop(&mut m).unwrap();
+  assert_eq!(m.cfg,initial);assert_eq!(m.claims,0);assert!(!s.is_held());
+ }
+ #[test]fn partial_map_and_child_failures_restore(){
+  for child in [false,true]{
+   let mut m=fixture();let initial=m.cfg;m.fail_open=!child;m.fail_child=child;let mut s=session();
+   assert!(s.start(&mut m,0x32).is_err());assert_eq!(m.cfg,initial);
+   assert_eq!(m.claims,0);assert!(!m.mapped&&!m.child&&!s.is_held());
+  }
+ }
+ #[test]fn failed_rollback_retains_claims_until_retry(){
+  let mut m=fixture();let initial=m.cfg;m.fail_open=true;m.fail_close=true;let mut s=session();
+  assert_eq!(s.start(&mut m,0x32),Err(Error::Cleanup));assert!(s.is_held());assert_eq!(m.claims,4);
+  m.fail_close=false;s.stop(&mut m).unwrap();assert_eq!(m.cfg,initial);assert_eq!(m.claims,0);
+ }
+}
