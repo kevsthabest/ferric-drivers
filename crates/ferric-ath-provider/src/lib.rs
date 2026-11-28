@@ -12,6 +12,7 @@ mod dma_platform;
 mod session;
 mod nonce;
 mod packet_api;
+mod dos;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo)->!{loop{}}
@@ -79,8 +80,8 @@ pub extern "C" fn ath_probe(slot:u32)->u32{
 pub extern "C" fn ath_dma_start(seg:u32)->u32{
     let s=state();
     let Some(slot)=s.slot else{return 5;};
-    if s.link.is_some(){return 2;}
-    if s.info.stage!=4||s.info.mac_ok==0||seg==0||seg>0xffff{return 1;}
+    if s.link.is_some()||!s.dma.can_unload(){return 2;}
+    if s.info.stage!=4||s.info.mac_ok==0||!dos::valid_dma_segment(seg){return 1;}
     let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
     match s.dma.start(&mut io,seg<<4){Ok(_)=>0,Err(_)=>if s.dma.can_unload(){9}else{7}}
 }
@@ -109,6 +110,7 @@ pub unsafe extern "C" fn ath_connect_internal(seg:u32,req:*mut ferric_ath5k::con
     let sn=unsafe{core::ptr::read_unaligned(nonce)};
     if !session::valid(&r,&sn){return 1;}
     if state().info.aes_hw==0{return 5;}
+    if !dos::valid_dma_segment(seg){return 1;}
     if !state().nonce.accept(sn){return 1;}
     let status=ath_dma_start(seg);if status!=0{return status;}
     let s=state();

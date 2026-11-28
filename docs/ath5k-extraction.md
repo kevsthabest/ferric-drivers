@@ -73,3 +73,7 @@ Experimental AX=20h returns stub length/paragraphs, 21h copies the stub, 22h ins
 ## DOS utilities and QEMU gate smoke
 
 CI fbb1c0d passed. ATHDIAG.COM queries the standalone DDBs, reports bridge count/audit, attempts slot 0 probe, reports probe stage, tests disconnected packet install rejection and releases the mapping. It is not a passive diagnostic on an already activated socket, so use only in the experimental test configuration. ATHINIT.COM allocates and retains a 512-byte packet stub for an existing connected resident, quarantines uncertain installation failures and otherwise frees the allocation. No DOS connection or DMA allocation service is enabled. QEMU no-NIC smoke tests cover dependencies, no child, rejected install, absent packet signature and unload. No real ToPIC/AR2413 is emulated. CI pending.
+
+## DOS scan/connect transaction boundary
+
+FD0A AX=24h (BX DMA segment, ES:DI 720-byte scan result) and AX=25h (BX DMA segment, ES:DI 192-byte request containing WifiConnectReq and 32 external random bytes) validate conventional memory and disjoint DMA ranges. Connection wipes accepted caller request and local passphrase/nonce copies; compiler-generated copies and handshake storage are not yet guaranteed erased. Status 7 means retain allocation; status 0 on connection also means retain allocation. Duplicate DMA start returns 2. Hardware enable remains blocked by provider and DMA qualification gates. DOS allocation owner must retain on uncertainty, and no current utility calls these operations yet.

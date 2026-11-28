@@ -3,7 +3,7 @@ cpu 386
 bits 32
 extern ath_version,ath_probe,ath_shutdown,ath_query
 extern ath_packet_api,ath_packet_ready,ath_packet_busy,ath_upcall_next,ath_upcall_after
-extern ath_stub_validate
+extern ath_stub_validate,ath_dos_scan,ath_dos_connect
 %define PKT_BRIDGE_VECTOR 0xF1
 %define TIMER_VECTOR 0x1C
 %define VMM_SIMULATE_FAR_RET 13
@@ -196,6 +196,10 @@ dispatch:
  je .install
  cmp eax,0x23
  je .remove
+ cmp eax,0x24
+ je .scan
+ cmp eax,0x25
+ je .connect
  jmp .bad
 .ping:
  mov word [ebp+28],1
@@ -258,6 +262,28 @@ dispatch:
  jmp .done
 .remove:
  call packet_remove
+ mov [ebp+CLIENT_EAX],eax
+ jmp .done
+.scan:
+ movzx eax,word [ebp+CLIENT_EDI]
+ push eax
+ movzx eax,word [ebp+CLIENT_ES]
+ push eax
+ movzx eax,word [ebp+CLIENT_EBX]
+ push eax
+ call ath_dos_scan
+ add esp,12
+ mov [ebp+CLIENT_EAX],eax
+ jmp .done
+.connect:
+ movzx eax,word [ebp+CLIENT_EDI]
+ push eax
+ movzx eax,word [ebp+CLIENT_ES]
+ push eax
+ movzx eax,word [ebp+CLIENT_EBX]
+ push eax
+ call ath_dos_connect
+ add esp,12
  mov [ebp+CLIENT_EAX],eax
  jmp .done
 .stop:
