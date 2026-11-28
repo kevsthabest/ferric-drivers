@@ -53,3 +53,8 @@ Also copy CBPROBE.COM. WIFIGATE.BAT now saves CBPRE.TXT before loading any modul
 
 ## Physical Gate A result (2026-11-28)
 Both 256-byte ToPIC95 configuration snapshots match before/after. Slot 0 audit=0, slot 1 audit=4 (expected bus conflict), probe/scan/install=5, stop=0, resident=9 after unload. This qualifies only the observed discovery/unload configuration. Gate B remains blocked: root windows and occupied aperture lengths are not independently established. A pure slot-0 authorization validator now checks complete evidence, root containment, occupied range overlap and bus conflicts; it is not wired to activation. No fabricated range or BIOS E820 hole is sufficient authorization.
+
+## Gate B evidence collector
+Gate A and the pure authorization validator passed CI at 7939e0d (46109918860). PCIEVID.COM captures the full 256-byte PCI configuration for each responding function on buses 0–4. All functions are included intentionally to expose aliases; identical functions must not automatically be counted as independent devices. It restores the CF8 latch and never writes CFC, sizes BARs, powers sockets or enables DMA.
+
+Cold boot without Ferric or other hardware drivers, run `PCIEVID > PCIEVID.TXT`, and preserve the output. No JLM is required. This supplements (does not replace) the existing BIOS ACPI and E820 captures. PCI config alone cannot establish BAR lengths or ACPI root resource windows. If firmware has no usable _CRS, independently obtained chipset/OS resource information will still be required. The activation gate remains false.

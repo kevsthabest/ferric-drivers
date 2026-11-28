@@ -151,5 +151,14 @@ def main():
         ("shutdown", "ATHSTOP: status=0" in s),
     ])
 
+    run(base, output, "pci-evidence", [
+        "PCIEVID > PCIEVID.TXT",
+        "TYPE PCIEVID.TXT > COM1",
+    ], False, lambda s: [
+        ("inventory completed", "PCIEVID: END" in s),
+        ("host bridge found", "PCI BDF=00:00.00" in s),
+        ("config rows emitted", "00:" in s and "F0:" in s),
+    ])
+
 if __name__ == "__main__":
     main()

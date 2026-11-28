@@ -45,7 +45,7 @@ PY
 mcopy -i "$tmp/base.img" "$tmp/KERNEL.SYS" ::/KERNEL.SYS
 mcopy -i "$tmp/base.img" /opt/freedos/command.com ::/COMMAND.COM
 mcopy -i "$tmp/base.img" /opt/freedos/jemm/JEMMEX.EXE /opt/freedos/jemm/JLOAD.EXE ::/
-mcopy -i "$tmp/base.img" out/FRES.JLM out/I8255X.JLM out/ETHINIT.COM out/NTEST.COM out/CARDBUS.JLM out/ATH5K.JLM out/ATHDIAG.COM out/ATHINIT.COM out/ATHSCAN.COM out/ATHCONN.COM out/ATHSTOP.COM out/CBPROBE.COM out/WIFIGATE.BAT ::/
+mcopy -i "$tmp/base.img" out/FRES.JLM out/I8255X.JLM out/ETHINIT.COM out/NTEST.COM out/CARDBUS.JLM out/ATH5K.JLM out/ATHDIAG.COM out/ATHINIT.COM out/ATHSCAN.COM out/ATHCONN.COM out/ATHSTOP.COM out/CBPROBE.COM out/WIFIGATE.BAT out/PCIEVID.COM ::/
 printf 'DEVICE=JEMMEX.EXE NOEMS D=64\r\nFILES=20\r\nBUFFERS=10\r\nLASTDRIVE=E\r\nSHELL=COMMAND.COM /P\r\n' > "$tmp/CONFIG.SYS"
 mcopy -i "$tmp/base.img" "$tmp/CONFIG.SYS" ::/
 python3 scripts/ethernet-qemu.py "$tmp/base.img" out/ethernet-qemu
