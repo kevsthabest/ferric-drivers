@@ -23,11 +23,15 @@ def screen(sock, dest):
         pass
     return "(screen unavailable)"
 
-def run(base, output, name, commands, nic, checks):
+def run(base, output, name, commands, nic, checks, plain=False):
     with tempfile.TemporaryDirectory(prefix="eth-qemu-") as work:
         work = Path(work)
         image, log, mon = work / "test.img", output / f"{name}.log", work / "mon.sock"
         shutil.copyfile(base, image)
+        if plain:
+            cfg = work / "CONFIG.SYS"
+            cfg.write_bytes(b"FILES=20\r\nBUFFERS=10\r\nSHELL=COMMAND.COM /P\r\n")
+            subprocess.run(["mcopy", "-o", "-i", str(image), str(cfg), "::/CONFIG.SYS"], check=True)
         bat = work / "AUTOEXEC.BAT"
         bat.write_bytes(("@ECHO OFF\r\n" + "\r\n".join(commands) +
                          "\r\nECHO ETHSMOKE-DONE > COM1\r\n").encode("ascii"))
@@ -166,6 +170,19 @@ def main():
         ("host bridge found", "PCI BDF=00:00.00" in s),
         ("config rows emitted", "00:" in s and "F0:" in s),
     ])
+
+    run(base, output, "pnp-evidence-protected", [
+        "PNPEVID > COM1",
+    ], False, lambda s: [
+        ("protected mode refuses call", "PNPEVID: END status=01" in s),
+        ("no firmware query", "PNPEVID: fn0=" not in s),
+    ])
+    run(base, output, "pnp-evidence-wrong-bios", [
+        "PNPEVID > COM1",
+    ], False, lambda s: [
+        ("different BIOS refuses call", "PNPEVID: END status=02" in s),
+        ("no firmware query", "PNPEVID: fn0=" not in s),
+    ], plain=True)
 
 if __name__ == "__main__":
     main()
