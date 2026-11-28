@@ -62,11 +62,23 @@ pub extern "C" fn cb_release(slot:u32,consumer:u32)->u32 {
     let Some(a)=slots()[slot as usize].as_mut() else{return 4;};
     if a.session.detach(consumer as u16).is_ok(){0}else{4}
 }
+struct AuditPci;
+impl ferric_cardbus::audit::PciRead for AuditPci {
+    fn read(&mut self,b:u8,d:u8,f:u8,o:u8)->u32{unsafe{read32(b,d,f,o)}}
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn cb_audit(slot:u32)->u32{
+    if slot>=2{return 1;}
+    let Some(r)=ferric_cardbus::slot_resources(slot as usize)else{return 1;};
+    ferric_cardbus::audit::inspect(&mut AuditPci,slot as u8,r) as u32
+}
 /// Experimental start entry for a future audited-resource caller. Not exported
 /// as a Jemm service yet; no path from DOS can activate it in this revision.
 #[unsafe(no_mangle)]
 pub extern "C" fn cb_start_audited(slot:u32)->u32 {
     if slot>=2{return 1;}
+    if cb_audit(slot)!=0{return 5;}
+    // A PCI-only scan is insufficient; platform firmware authorization remains absent.
     let cell=&mut slots()[slot as usize];if cell.is_some(){return 2;}
     let info=discover(slot,|f,o|unsafe{read32(0,TOPIC95_PCI_DEV,f,o)});
     if info.present==0{return 1;}

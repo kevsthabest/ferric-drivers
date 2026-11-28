@@ -90,6 +90,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `da55904`: successful host, target and Ethernet QEMU checks. I.3 resident adapter now links PCI/MMIO/FRES/PIT platform implementation and transaction coordinator; activation entry is intentionally not exported pending an actual firmware-resource audit. Consumer and shutdown paths wired to session state.
 
+- CI `f8c9804` passed. I.3 read-only PCI audit checks known host identity, bridge boot configuration, bus conflicts and visible BAR/window overlaps. Firmware resource authorization remains required; activation still unexported.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

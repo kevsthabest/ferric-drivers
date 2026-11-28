@@ -41,3 +41,7 @@ The pure provider Session composes the resource lease, configuration snapshot, s
 ## Platform adapter checkpoint
 
 The resident crate now links the Jemm page mapping/free services, FRES claims, serialized PCI I/O, MMIO power/reset operations and a bounded PIT delay. The internal activation routine is intentionally not accessible from the Jemm service table or DOS verbs: it still requires a real resource audit rather than assuming the legacy profile is safe. The shutdown and consumer paths use the transaction coordinator. This is not an operational bridge release.
+
+## Read-only audit checkpoint
+
+V86 AX=000A, BX=slot returns an audit result: 0=no detected PCI conflict, firmware authorization still required; 1=invalid; 2=wrong host; 3=unexpected bridge configuration; 4=bus conflict; 5=BAR/window conflict; 6=unknown header. No sizing writes. The historical DynaBook capture has command 0007 with zero BAR/windows and secondary bus 3/4, rather than command 0000. Successful socket state 30000820 does not contain PWRCYCLE; physical timing behavior must be reconciled before activation. The scan cannot determine all BAR sizes, prefetch windows, chipset or firmware reservations. Activation remains unexported.
