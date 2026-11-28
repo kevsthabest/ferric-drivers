@@ -1844,16 +1844,7 @@ pub(crate) fn wifi_is_connected() -> bool {
 }
 
 /// Disposition of a decapsulated Ethernet II frame received while connected.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum RxEthAction {
-    /// Deliver to the Crynwr packet-driver client.
-    Deliver,
-    /// Unicast EAPOL-Key PDU addressed to our station; feed to `Wpa2Handshake`.
-    Eapol,
-    /// Drop without delivering (plaintext on WPA2 session, self-broadcast echo,
-    /// or non-unicast EAPOL).
-    Drop,
-}
+pub use ferric_ath5k::packet::RxEthAction;
 
 /// Classify a decapsulated Ethernet II frame (`eth.len() >= 14`) on a live
 /// Wi-Fi session:
@@ -1865,69 +1856,14 @@ pub enum RxEthAction {
 /// - Broadcast/multicast frames whose source MAC equals `sta_mac` are AP
 ///   reflections of our own ToDS broadcasts (ARP/DHCP) and are dropped so the
 ///   DOS stack matches wired Ethernet semantics.
-pub fn classify_rx_eth_frame(
-    eth: &[u8],
-    sta_mac: &[u8; 6],
-    session_protected: bool,
-    frame_protected: bool,
-) -> RxEthAction {
-    if eth.len() < 14 {
-        return RxEthAction::Drop;
-    }
-    if session_protected && !frame_protected {
-        return RxEthAction::Drop;
-    }
-    if eth[12] == 0x88 && eth[13] == 0x8E {
-        if eth.len() >= 18 && bytes_eq(&eth[0..6], sta_mac) {
-            return RxEthAction::Eapol;
-        }
-        return RxEthAction::Drop;
-    }
-    if (eth[0] & 0x01) != 0 && bytes_eq(&eth[6..12], sta_mac) {
-        return RxEthAction::Drop;
-    }
-    RxEthAction::Deliver
-}
+pub use ferric_ath5k::packet::classify_rx_eth_frame;
 
 /// Encapsulate an Ethernet II frame into `out_dot11` and, when `protected` is
 /// true, software-encrypt it with IEEE 802.11i AES-128-CCM using `ptk_tk` and
 /// the next monotonic `tx_pn`. Advances `tx_seq` (and `tx_pn` when protected).
 /// Shared by `wifi_tx_eth` and post-connect EAPOL Group M2 replies so both
 /// follow the exact same CCMP encryption and packet-number sequence.
-pub fn encap_and_protect_eth(
-    out_dot11: &mut [u8],
-    eth: &[u8],
-    bssid: &[u8; 6],
-    sta_mac: &[u8; 6],
-    protected: bool,
-    ptk_tk: &[u8; 16],
-    tx_seq: &mut u16,
-    tx_pn: &mut u64,
-) -> Option<usize> {
-    let ccmp_pn = if protected {
-        let pn = *tx_pn;
-        *tx_pn = pn.wrapping_add(1);
-        Some((pn, 0u8))
-    } else {
-        None
-    };
-    let mut dlen = wifi_core::frame::encap_eth_to_80211(
-        out_dot11,
-        eth,
-        bssid,
-        sta_mac,
-        *tx_seq,
-        ccmp_pn,
-    );
-    *tx_seq = (*tx_seq + 1) & 0x0FFF;
-    if dlen == 0 {
-        return None;
-    }
-    if protected {
-        dlen = wifi_core::aes::ccmp_encrypt_frame(ptk_tk, out_dot11, dlen)?;
-    }
-    Some(dlen)
-}
+pub use ferric_ath5k::packet::encap_and_protect_eth;
 
 /// Feed a post-connect EAPOL PDU to the handshake machine kept from the
 /// connect-time exchange. The only event that needs action is a group-key

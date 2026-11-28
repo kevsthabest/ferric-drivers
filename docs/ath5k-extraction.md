@@ -41,3 +41,7 @@ Shared scan ABI and bounded passive scan engine (channels 1–11) use injected r
 ## WPA2 connection orchestration
 
 Shared `connection::connect` coordinates bounded open-system authentication, WPA2 association and the existing wifi-core four-way handshake over an injected LinkIo transport. It validates response address/identity, rejects short credentials and zero SNonce, requires ACK before installing keys, and retains the handshake object for group rekey. The caller must provide fresh unpredictable SNonce, verified AP/security selection and a leased transport. Integrated runtime still uses its original connection loop with the shared request ABI; resident hardware transport and full successful handshake tests remain pending.
+
+## Packet boundary
+
+Shared packet conversion/classification now serves integrated TX/RX classification and the future standalone data path. Protected TX refuses zero or exhausted 48-bit CCMP packet numbers rather than wrapping. The standalone receive helper validates AP/destination/DS direction, strips FCS and hardware-verified CCMP MIC, separates EAPOL from DOS payloads and pads short Ethernet frames. It requires the transport to verify descriptor success and decryption. DOS INT 60h installation, receiver callbacks and rekey handling are still pending; no standalone packet vector is installed.
