@@ -60,6 +60,7 @@ impl Lease {
         Ok(())
     }
     pub fn is_held(&self) -> bool { self.held != 0 }
+    pub fn has_consumer(&self) -> bool { self.consumer.is_some() }
 }
 #[cfg(test)]
 mod tests {
