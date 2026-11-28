@@ -1,0 +1,25 @@
+# Standalone ToPIC95 / AR2413 qualification
+Status: experimental, activation disabled. Never use this branch to replace a known-good boot configuration.
+
+## Gate A: read-only baseline
+- Cold boot without FERRIC.JLM, I8255X.JLM or other CardBus owners.
+- Capture complete PCI config and E820/ACPI resource evidence. Confirm ALi 1644/5247 and Toshiba 1179:0617 revision 32; record both functions and interrupt routing.
+- Load FRES, CARDBUS, ATH5K in that order. Run ATHDIAG on the inactive bridge and capture output.
+- Expected: two bridges on the target laptop if both functions are present, no eligible powered child, probe=5, install=5, stop=0. Audit 0 means clear PCI preflight only, not firmware authorization. Slot 1 may report bus conflict because the other bridge holds a firmware placeholder.
+- Run ATHSCAN; expect status 5 with no child. ATHINIT must reject disconnected install with status 5. Confirm INT 60h unchanged.
+- Unload ATH5K, CARDBUS, FRES. Repeat PCI captures; no device programming should have occurred.
+- Stop on unexpected results. Do not change activation constants.
+
+## Gate B: authorize physical resources (engineering)
+Compare the target's PCI BAR lengths and firmware resource reservations to the proposed socket and child apertures, including secondary/subordinate bus windows, aliases, prefetch windows and graphics. A BAR base alone is insufficient. Avoid writing all ones to live BARs. Require explicit evidence of non-overlap, a known reset/power recovery path and reversible bridge snapshots. Test one socket at a time. No DMA.
+
+## Gate C: controlled activation (future engineering build only)
+After authorization, stage decode-off/reset-asserted configuration, verify each write, map socket, power 3.3 V, identify exact 168C:001A child. No bus master. Record status at every step and verify rollback on removal, timeout and mapping failure. Check writable masks rather than treating volatile/W1C bits as restorable.
+
+## Gate D: DMA isolation (future engineering build only)
+Use a sacrificial, retained DOS allocation, verify physical contiguity and guards, initialize ring before enabling mastering. Validate engine idle, PCI child and bridge BME off, posted-write behavior and outstanding transactions. A delay/readback alone is insufficient evidence. Verify canaries, repeat shutdown and check for late writes with suitable instrumentation. On uncertainty keep memory and module resident and cold boot. Never free the block on failed stop. A test pass is not a hardware specification.
+
+## Gate E: networking (future)
+Supply a fresh external random nonce for every association. Test passive scan, known WPA2-PSK AES AP, DHCP, ARP, TCP, group rekey, repeated connect/disconnect, packet receiver release, removal and reboot recovery. Compare large and multi-file transfers against checksums. Test Ethernet vector conflict and restoration. Keep credentials out of logs and source control.
+
+Current build can perform Gate A only. QEMU covers negative discovery and loading, not hardware activation, RF, DMA drain or WPA2 connectivity.

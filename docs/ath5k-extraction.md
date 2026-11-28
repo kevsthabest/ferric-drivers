@@ -77,3 +77,5 @@ CI fbb1c0d passed. ATHDIAG.COM queries the standalone DDBs, reports bridge count
 ## DOS scan/connect transaction boundary
 
 FD0A AX=24h (BX DMA segment, ES:DI 720-byte scan result) and AX=25h (BX DMA segment, ES:DI 192-byte request containing WifiConnectReq and 32 external random bytes) validate conventional memory and disjoint DMA ranges. Connection wipes accepted caller request and local passphrase/nonce copies; compiler-generated copies and handshake storage are not yet guaranteed erased. Status 7 means retain allocation; status 0 on connection also means retain allocation. Duplicate DMA start returns 2. Hardware enable remains blocked by provider and DMA qualification gates. DOS allocation owner must retain on uncertainty, and no current utility calls these operations yet.
+
+ATHSCAN.COM now owns a 16 KiB DOS allocation, calls the bounded scan ABI, frees only after non-retained status, and stays resident on uncertain cleanup. See [wireless qualification](wireless-qualification.md). No connection loader or live activation yet.

@@ -115,6 +115,7 @@ def main():
         "JLOAD ATH5K.JLM",
         "ATHDIAG > COM1",
         "ATHINIT > COM1",
+        "ATHSCAN > COM1",
         "NTEST > COM1",
         "JLOAD -u ATH5K.JLM",
         "JLOAD -u CARDBUS.JLM",
@@ -126,6 +127,7 @@ def main():
         ("no bridge", "ATHDIAG: bridges=0" in s),
         ("no powered child", "ATHDIAG: probe=5" in s),
         ("no packet installation", "ATHDIAG: install=5" in s and "ATHINIT: status=5" in s),
+        ("scan refused without child", "ATHSCAN: status=5" in s),
         ("no public packet vector", "NTEST: found=0" in s),
         ("clean shutdown", "ATHDIAG: stop=0" in s),
     ])
