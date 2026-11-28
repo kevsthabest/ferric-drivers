@@ -11,6 +11,14 @@ name = "ferric-ehci"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-ethernet"
+version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+ "ferric-i8255x",
+]
+
+[[package]]
 name = "ferric-exfat"
 version = "0.1.0"
 dependencies = [
