@@ -10,6 +10,7 @@ pub mod power;
 pub mod provider;
 pub mod audit;
 pub mod authorization;
+pub mod dynabook;
 pub mod child;
 
 pub const TOPIC95_VID: u16 = 0x1179;
