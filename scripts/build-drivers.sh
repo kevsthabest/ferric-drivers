@@ -7,7 +7,7 @@ for crate in ferric-res ferric-cb-provider ferric-ath-provider ferric-ethernet g
 done
 
 # External VSBHDA dependencies are intentionally not part of this build.
-for artifact in FRES.JLM CARDBUS.JLM ATH5K.JLM I8255X.JLM ETHINIT.COM FERRIC.JLM EXFAT.JLM NTFS.JLM VBE.JLM PMU.JLM TOSHSD.JLM NETINIT.COM SDPROBE.COM PWRCTL.COM; do
+for artifact in FRES.JLM CARDBUS.JLM ATH5K.JLM ATHDIAG.COM ATHINIT.COM I8255X.JLM ETHINIT.COM FERRIC.JLM EXFAT.JLM NTFS.JLM VBE.JLM PMU.JLM TOSHSD.JLM NETINIT.COM SDPROBE.COM PWRCTL.COM; do
     test -s "out/$artifact"
 done
 sha256sum out/ATH5K.JLM out/CARDBUS.JLM out/I8255X.JLM out/ETHINIT.COM out/FRES.JLM out/FERRIC.JLM out/EXFAT.JLM out/NTFS.JLM out/VBE.JLM out/PMU.JLM out/TOSHSD.JLM

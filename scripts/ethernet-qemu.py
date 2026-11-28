@@ -106,5 +106,29 @@ def main():
         ("missing NIC handled", "ETHINIT: status=1" in s),
     ])
 
+    run(base, output, "wireless-gates", [
+        "ATHDIAG > COM1",
+        "JLOAD FRES.JLM",
+        "JLOAD ATH5K.JLM",
+        "ATHDIAG > COM1",
+        "JLOAD CARDBUS.JLM",
+        "JLOAD ATH5K.JLM",
+        "ATHDIAG > COM1",
+        "ATHINIT > COM1",
+        "NTEST > COM1",
+        "JLOAD -u ATH5K.JLM",
+        "JLOAD -u CARDBUS.JLM",
+        "JLOAD -u FRES.JLM",
+        "ATHDIAG > COM1",
+    ], False, lambda s: [
+        ("missing dependencies refused and unload", s.count("ATHDIAG: resident=9") == 3),
+        ("provider loads", s.count("ATHDIAG: resident=0") == 1),
+        ("no bridge", "ATHDIAG: bridges=0" in s),
+        ("no powered child", "ATHDIAG: probe=5" in s),
+        ("no packet installation", "ATHDIAG: install=5" in s and "ATHINIT: status=5" in s),
+        ("no public packet vector", "NTEST: found=0" in s),
+        ("clean shutdown", "ATHDIAG: stop=0" in s),
+    ])
+
 if __name__ == "__main__":
     main()

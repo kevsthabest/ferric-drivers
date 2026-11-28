@@ -8,6 +8,8 @@ cd "${ROOT_DIR}"
 OUT_DIR="${ROOT_DIR}/out"
 mkdir -p "${OUT_DIR}"
 nasm -f bin -o out/athstub.bin crates/ferric-ath-provider/asm/athstub.asm
+nasm -f bin -o out/ATHDIAG.COM crates/ferric-ath-provider/asm/athdiag.asm
+nasm -f bin -o out/ATHINIT.COM crates/ferric-ath-provider/asm/athinit.asm
 
 
 
@@ -28,7 +30,7 @@ python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 echo "[ferric-ath-provider] 3/5 Converting ELF32->COFF and assembling ath_jlm.asm..."
 python3 crates/gate1-svc/elf32_to_coff.py "${JLM_RUST_OBJ}" "${JLM_RUST_COFF}"
 nasm -f win32 -o "${JLM_STUB_OBJ}" crates/ferric-ath-provider/asm/ath_jlm.asm
-python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm crates/ferric-ath-provider/asm/athstub.asm
+python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm crates/ferric-ath-provider/asm/athstub.asm crates/ferric-ath-provider/asm/athdiag.asm crates/ferric-ath-provider/asm/athinit.asm
 
 echo "[ferric-ath-provider] 4/5 Linking relocatable PE32 JLM out/ATH5K.DLL and PX-patching..."
 wlink format windows nt dll runtime native     file "${JLM_STUB_OBJ},${JLM_RUST_COFF}"     name "${JLM_DLL}"     option start=DllMain,quiet     export _ddb.1

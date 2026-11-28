@@ -69,3 +69,7 @@ Standalone packet API core implements the Crynwr register interface, four exclus
 ## Real-mode packet bridge
 
 Experimental AX=20h returns stub length/paragraphs, 21h copies the stub, 22h installs against a connected resident session and 23h removes it. INT 60h and private INT F1h are exclusively claimed via FRES; INT 1Ch polls receive and performs two-stage callbacks with a bounded budget. Removal refuses active receivers, restores the incumbent vector only if still owned, tombstones the stub and retries failed unhooks/releases. The caller must retain its DOS allocation until removal succeeds. No DOS installer or connection activation is enabled yet. Combined CI pending.
+
+## DOS utilities and QEMU gate smoke
+
+CI fbb1c0d passed. ATHDIAG.COM queries the standalone DDBs, reports bridge count/audit, attempts slot 0 probe, reports probe stage, tests disconnected packet install rejection and releases the mapping. It is not a passive diagnostic on an already activated socket, so use only in the experimental test configuration. ATHINIT.COM allocates and retains a 512-byte packet stub for an existing connected resident, quarantines uncertain installation failures and otherwise frees the allocation. No DOS connection or DMA allocation service is enabled. QEMU no-NIC smoke tests cover dependencies, no child, rejected install, absent packet signature and unload. No real ToPIC/AR2413 is emulated. CI pending.

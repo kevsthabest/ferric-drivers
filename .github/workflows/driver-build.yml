@@ -21,7 +21,7 @@ jobs:
         run: docker build -t ferric-drivers-build .
       - name: Host tests and target module builds
         run: docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-drivers.sh
-      - name: Standalone Ethernet QEMU smoke tests
+      - name: Standalone Ethernet and wireless gate QEMU smoke tests
         run: docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-ethernet-qemu.sh
       - name: Upload driver binaries and runtime logs
         if: always()
