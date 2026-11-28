@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
+pub mod registers;
+
 const AR5K_SREV_AR5212_V4: u32 = 0x54;
 const AR5K_EEPROM_VERSION_5_0: u16 = 0x5000;
 const AR5K_EEPROM_AES_DIS_BIT: u16 = 0x0002;

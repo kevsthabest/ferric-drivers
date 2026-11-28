@@ -1,3 +1,7 @@
 # AR2413 extraction
 
 The shared `ferric-ath5k` crate extracts existing EEPROM decoding, RF channel/timing calculations, RX and TX descriptor encoding, and CCMP key table encoding. The integrated driver re-exports these functions, preserving its existing callers. No radio register sequences or packet facade have been moved yet. The standalone FD0A module will depend on CardBus FD09 and use the same shared backend. Physical activation remains gated.
+
+## Register transaction extraction
+
+The shared RegisterIo interface now owns bounded MAC wake, reset and EEPROM read sequences; the integrated adapter supplies its existing volatile MMIO and PIT delay. All-ones reads and timer failure abort the shared operations. The legacy delay adapter cannot report failure yet and retains its existing behavior. Tests simulate success, absent hardware, stuck status and delay failure. No standalone radio activation is enabled.

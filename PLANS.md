@@ -100,6 +100,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `48a8e0c` passed. I.3 Atheros extraction begins with shared pure EEPROM/RF/descriptor/CCMP helpers; integrated code re-exports them. Standalone hardware backend remains pending.
 
+- I.3: fixed CI dead-code failure from stale bitswap helper; extracted wake/reset/EEPROM register transactions behind shared RegisterIo, with timeout and absent-hardware tests. Target CI pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

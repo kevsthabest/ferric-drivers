@@ -20,7 +20,7 @@ const AR5K_CR: usize = 0x0008;
 const AR5K_CR_RXE: u32 = 0x0000_0004;
 const AR5K_CR_RXD: u32 = 0x0000_0020;
 const AR5K_RXDP: usize = 0x000C;
-const AR5K_CFG: usize = 0x0014;
+
 const AR5K_IER: usize = 0x0024;
 const AR5K_IER_DISABLE: u32 = 0x0000_0000;
 const AR5K_IER_ENABLE: u32 = 0x0000_0001;
@@ -49,26 +49,26 @@ const AR5K_DCU_RETRY_LMT_0: usize = 0x1080; // AR5K_QUEUE_DFS_RETRY_LIMIT(0)
 const AR5K_DCU_MISC_0: usize = 0x1100; // AR5K_QUEUE_DFS_MISC(0)
 const AR5K_DCU_MISC_FRAG_WAIT: u32 = 0x0000_0100;
 
-const AR5K_RESET_CTL: usize = 0x4000;
+
 const AR5K_RESET_CTL_PCU: u32 = 0x0000_0001;
 const AR5K_RESET_CTL_BASEBAND: u32 = 0x0000_0002;
 const AR5K_RESET_CTL_PCI: u32 = 0x0000_0010;
-const AR5K_SLEEP_CTL: usize = 0x4004;
-const AR5K_SLEEP_CTL_SLE: u32 = 0x0003_0000;
-const AR5K_SLEEP_CTL_SLE_WAKE: u32 = 0x0000_0000;
+
+
+
 const AR5K_INTPEND: usize = 0x4008;
 const AR5K_PCICFG: usize = 0x4010;
 const AR5K_PCICFG_RETRY_FIX: u32 = 0x0000_1000;
-const AR5K_PCICFG_SPWR_DN: u32 = 0x0001_0000;
+
 const AR5K_SREV: usize = 0x4020;
 
-const AR5K_EEPROM_BASE: usize = 0x6000;
-const AR5K_EEPROM_DATA: usize = 0x6004; // 5211+ / AR2413
-const AR5K_EEPROM_CMD: usize = 0x6008;
-const AR5K_EEPROM_CMD_READ: u32 = 0x0000_0001;
-const AR5K_EEPROM_STATUS: usize = 0x600C; // 5211+ / AR2413
-const AR5K_EEPROM_STAT_RDERR: u32 = 0x0000_0001;
-const AR5K_EEPROM_STAT_RDDONE: u32 = 0x0000_0002;
+
+ // 5211+ / AR2413
+
+
+ // 5211+ / AR2413
+
+
 
 // Station / BSSID / Key-cache registers (vendor/ref/linux-ath/ath5k/reg.h, ../reg.h).
 const AR5K_STA_ID0: usize = 0x8000;
@@ -463,77 +463,23 @@ unsafe fn reg_w32(base: u32, off: usize, val: u32) {
     unsafe { core::ptr::write_volatile((base as usize + off) as *mut u32, val) }
 }
 
+struct LegacyRegisters(u32);
+impl ferric_ath5k::registers::RegisterIo for LegacyRegisters {
+    fn read(&mut self,off:usize)->u32{unsafe{reg_r32(self.0,off)}}
+    fn write(&mut self,off:usize,value:u32){unsafe{reg_w32(self.0,off,value)}}
+    fn delay_ms(&mut self,ms:u32)->bool{cardbus::delay_ms(ms);true}
+}
+
 unsafe fn wake_chip(base: u32) -> bool {
-    unsafe {
-        let mut staid = reg_r32(base, AR5K_STA_ID1);
-        staid &= !AR5K_STA_ID1_PWR_SV;
-
-        let mut data = reg_r32(base, AR5K_SLEEP_CTL);
-        if (data & 0xFFC0_0000) != 0 {
-            data = 0;
-        } else {
-            data &= !AR5K_SLEEP_CTL_SLE;
-        }
-        reg_w32(base, AR5K_SLEEP_CTL, data | AR5K_SLEEP_CTL_SLE_WAKE);
-        cardbus::delay_ms(1);
-
-        let mut awake = false;
-        for _ in 0..100 {
-            if (reg_r32(base, AR5K_PCICFG) & AR5K_PCICFG_SPWR_DN) == 0 {
-                awake = true;
-                break;
-            }
-            cardbus::delay_ms(1);
-            reg_w32(base, AR5K_SLEEP_CTL, data | AR5K_SLEEP_CTL_SLE_WAKE);
-        }
-        if !awake {
-            return false;
-        }
-        reg_w32(base, AR5K_STA_ID1, staid);
-        true
-    }
+    ferric_ath5k::registers::wake_chip(&mut LegacyRegisters(base))
 }
 
 unsafe fn nic_reset(base: u32, val: u32) -> bool {
-    unsafe {
-        let _ = reg_r32(base, AR5K_RXDP);
-        reg_w32(base, AR5K_RESET_CTL, val);
-        cardbus::delay_ms(1);
-
-        let mask = AR5K_RESET_CTL_PCU | AR5K_RESET_CTL_BASEBAND;
-        let expected = val & mask;
-        let mut ok = false;
-        for _ in 0..100 {
-            if (reg_r32(base, AR5K_RESET_CTL) & mask) == expected {
-                ok = true;
-                break;
-            }
-            cardbus::delay_ms(1);
-        }
-        if (val & AR5K_RESET_CTL_PCU) == 0 {
-            reg_w32(base, AR5K_CFG, 0);
-        }
-        ok
-    }
+    ferric_ath5k::registers::nic_reset(&mut LegacyRegisters(base), val)
 }
 
 unsafe fn eeprom_read(base: u32, offset: u32) -> Option<u16> {
-    unsafe {
-        reg_w32(base, AR5K_EEPROM_BASE, offset);
-        let cmd = reg_r32(base, AR5K_EEPROM_CMD);
-        reg_w32(base, AR5K_EEPROM_CMD, cmd | AR5K_EEPROM_CMD_READ);
-
-        for _ in 0..5000 {
-            let status = reg_r32(base, AR5K_EEPROM_STATUS);
-            if (status & AR5K_EEPROM_STAT_RDDONE) != 0 {
-                if (status & AR5K_EEPROM_STAT_RDERR) != 0 {
-                    return None;
-                }
-                return Some((reg_r32(base, AR5K_EEPROM_DATA) & 0xFFFF) as u16);
-            }
-        }
-        None
-    }
+    ferric_ath5k::registers::eeprom_read(&mut LegacyRegisters(base), offset)
 }
 
 /// One bounded self-heal attempt for a card whose SREV reads back all-ones
@@ -719,16 +665,6 @@ const RX_DESC_STRIDE: usize = 64;
 const RX_BUF_BASE: usize = 0x0400; // 1 KiB-aligned after RX (0x000..0x200) + TX (0x300) descs
 const RX_BUF_SIZE: usize = 1600; // 8 * 1600 = 0x3200 -> 0x0400..0x3600 (before TX_BUF 0x3800)
 
-const fn bitswap8(mut v: u32) -> u32 {
-    let mut out = 0u32;
-    let mut i = 0;
-    while i < 8 {
-        out = (out << 1) | (v & 1);
-        v >>= 1;
-        i += 1;
-    }
-    out
-}
 
 /// Compute `(rf_buf_lo, rf_buf_hi)` for RF5112/RF2413 2.4 GHz channels 1..=13
 /// (`freq = 2407 + 5 * ch` MHz) per Linux `ath5k/phy.c:1335-1373`.
