@@ -45,3 +45,7 @@ The resident crate now links the Jemm page mapping/free services, FRES claims, s
 ## Read-only audit checkpoint
 
 V86 AX=000A, BX=slot returns an audit result: 0=no detected PCI conflict, firmware authorization still required; 1=invalid; 2=wrong host; 3=unexpected bridge configuration; 4=bus conflict; 5=BAR/window conflict; 6=unknown header. No sizing writes. The historical DynaBook capture has command 0007 with zero BAR/windows and secondary bus 3/4, rather than command 0000. Successful socket state 30000820 does not contain PWRCYCLE; physical timing behavior must be reconciled before activation. The scan cannot determine all BAR sizes, prefetch windows, chipset or firmware reservations. Activation remains unexported.
+
+## BIOS reconciliation
+
+The specific pre-CBINIT capture (command 0007, BAR/windows zero, bus 3/4, rev 32, IRQ FF) can now be captured by the DynaBook-only snapshot path. Generic capture still rejects active decoding. Stage first disables I/O/memory/master and verifies readback; restore verifies windows before restoring the saved command. Power startup still requires PWRCYCLE during stabilization but does not require it to persist after reset release; the final recorded state 30000820 is accepted only with 3.3 V selection readback and valid card presence/type. This does not establish resource authorization or physical qualification.

@@ -92,6 +92,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `f8c9804` passed. I.3 read-only PCI audit checks known host identity, bridge boot configuration, bus conflicts and visible BAR/window overlaps. Firmware resource authorization remains required; activation still unexported.
 
+- CI `980afef` passed host/target and Ethernet QEMU. CardBus now models the captured unassigned-but-enabled DynaBook bridge with explicit profile capture, disables decoding before reprogramming, and permits PWRCYCLE to clear after confirmed stabilization/reset release. Added regression tests. Activation remains unexported.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

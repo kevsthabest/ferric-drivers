@@ -14,6 +14,7 @@ pub enum Error { Busy, Resources, Config, Mapping, Power, Consumer, Cleanup }
 pub struct Session {
     lease: Lease,
     resources: SlotResources,
+    slot:u8,
     snapshot: Option<Snapshot>,
     socket_attempted: bool,
     socket_open: bool,
@@ -22,7 +23,7 @@ pub struct Session {
 impl Session {
     pub fn new(slot:u8,r:SlotResources,occupied:&[Range],buses:&[u8])->Result<Self,Error> {
         Ok(Self { lease:Lease::new(slot,r,occupied,buses).map_err(|_|Error::Resources)?,
-            resources:r,snapshot:None,socket_attempted:false,socket_open:false,ready:false })
+            resources:r,slot,snapshot:None,socket_attempted:false,socket_open:false,ready:false })
     }
     pub fn start(&mut self,io:&mut impl Platform,rev:u8)->Result<u32,Error> {
         if self.lease.is_held() { return Err(Error::Busy); }
@@ -34,7 +35,7 @@ impl Session {
         }
     }
     fn start_claimed(&mut self,io:&mut impl Platform,r:SlotResources,rev:u8)->Result<u32,Error> {
-        self.snapshot=Some(Snapshot::capture(io).map_err(|_|Error::Config)?);
+        self.snapshot=Some(Snapshot::capture_dynabook(io,self.slot).map_err(|_|Error::Config)?);
         self.snapshot.as_ref().ok_or(Error::Config)?.stage(io,r,rev).map_err(|_|Error::Config)?;
         self.socket_attempted=true;
         if !io.open_socket(r.bar0_phys){return Err(Error::Mapping);}

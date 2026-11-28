@@ -70,7 +70,11 @@ fn start(io: &mut impl SocketIo) -> Result<u32, Error> {
     let s = io.state();
     if s == u32::MAX { return Err(Error::Absent); }
     if !decode_socket_state(s).card_present { return Err(Error::Empty); }
-    if s & CB_BADVCCREQ != 0 || s & CB_PWRCYCLE == 0 { return Err(Error::Voltage); }
+    // PWRCYCLE was observed before reset release; the captured DynaBook
+    // successful state 0x30000820 no longer has it set. Require voltage
+    // selection readback and a still-present 3.3 V CardBus card instead.
+    let d=decode_socket_state(s);
+    if s & CB_BADVCCREQ != 0 || !d.is_cardbus || !d.supports_3v3 || io.control()!=CB_SC_VCC_3V { return Err(Error::Voltage); }
     Ok(s)
 }
 /// On every failed startup attempt, leave power off and reset asserted.
@@ -85,9 +89,9 @@ pub fn power_on(io: &mut impl SocketIo) -> Result<u32, Error> {
 mod tests {
     use super::*;
     use crate::{CB_CBCARD, CB_3VCARD, CB_5VCARD, CB_CDETECT1};
-    struct Mock { status: u32, ctrl: u32, reset: bool, fail_delay: bool, ever_powered: bool, power_status: u32 }
+    struct Mock { status: u32, ctrl: u32, reset: bool, fail_delay: bool, ever_powered: bool, power_status: u32, after_reset: Option<u32> }
     impl SocketIo for Mock {
-        fn state(&mut self)->u32 { if self.ctrl != 0 { self.power_status } else { self.status } }
+        fn state(&mut self)->u32 { if self.ctrl != 0 { if !self.reset { self.after_reset.unwrap_or(self.power_status) } else {self.power_status} } else { self.status } }
         fn control(&mut self)->u32 { self.ctrl }
         fn set_control(&mut self,v:u32) { if v!=0 { assert!(self.reset); self.ever_powered=true; } self.ctrl=v; }
         fn set_reset(&mut self,v:bool)->bool { self.reset=v; true }
@@ -97,12 +101,17 @@ mod tests {
         fn force(&mut self,_:u32) {}
         fn delay_ms(&mut self,_:u32)->bool { !self.fail_delay }
     }
-    fn fixture()->Mock { Mock { status:CB_CBCARD|CB_3VCARD,ctrl:0,reset:false,fail_delay:false,ever_powered:false,power_status:CB_CBCARD|CB_3VCARD|CB_PWRCYCLE } }
+    fn fixture()->Mock { Mock { status:CB_CBCARD|CB_3VCARD,ctrl:0,reset:false,fail_delay:false,ever_powered:false,power_status:CB_CBCARD|CB_3VCARD|CB_PWRCYCLE,after_reset:None } }
     #[test]
     fn successful_cycle() {
         let mut m=fixture(); assert!(power_on(&mut m).is_ok());
         assert_eq!(m.ctrl,CB_SC_VCC_3V); assert!(!m.reset);
         power_off(&mut m).unwrap(); assert_eq!(m.ctrl,0); assert!(m.reset);
+    }
+    #[test]
+    fn power_cycle_bit_can_clear_after_reset_release() {
+        let mut m=fixture();m.after_reset=Some(0x30000820);
+        assert_eq!(power_on(&mut m),Ok(0x30000820));
     }
     #[test]
     fn empty_or_wrong_voltage_never_powers() {
