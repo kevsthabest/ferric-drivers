@@ -61,6 +61,7 @@ impl Lease {
     }
     pub fn is_held(&self) -> bool { self.held != 0 }
     pub fn has_consumer(&self) -> bool { self.consumer.is_some() }
+    pub fn consumer_is(&self,id:u16)->bool{self.consumer==Some(id)}
 }
 #[cfg(test)]
 mod tests {

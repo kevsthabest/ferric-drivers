@@ -1,7 +1,7 @@
 ; CARDBUS.JLM experimental discovery provider (FD09).
 cpu 386
 bits 32
-extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown, cb_audit
+extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown, cb_audit, cb_dma_master
 %define VMM_PAGE_FREE 0x12
 %define VMM_PAGE_RESERVE 0x27
 %define VMM_PAGE_COMMIT_PHYS 0x2A
@@ -16,7 +16,7 @@ extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown
  dw %1,0xFD07
 %endmacro
 section .data align=4
-services: dd cb_version,query,acquire,release
+services: dd cb_version,query,acquire,release,dma_master
 global _ddb
 _ddb:
  dd 0
@@ -26,7 +26,7 @@ _ddb:
  db "CARDBUS "
  dd 0x80000000,control,dispatch
  dd 0,0,0,0
- dd services,4
+ dd services,5
  dd 0,0,80,0,0,0
 section .text align=4
 global cb_map
@@ -120,6 +120,15 @@ control:
 WRAP2 query,cb_query
 WRAP2 acquire,cb_acquire
 WRAP2 release,cb_release
+dma_master:
+ pushfd
+ cli
+ cld
+ times 3 push dword [esp+16]
+ call cb_dma_master
+ add esp,12
+ popfd
+ ret
 dispatch:
  pushfd
  cli

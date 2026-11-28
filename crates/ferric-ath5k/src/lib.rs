@@ -8,6 +8,7 @@ pub mod initvals;
 pub mod radio;
 pub mod dma;
 pub mod engine;
+pub mod dma_lease;
 
 const AR5K_SREV_AR5212_V4: u32 = 0x54;
 const AR5K_EEPROM_VERSION_5_0: u16 = 0x5000;

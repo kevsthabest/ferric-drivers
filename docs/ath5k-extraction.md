@@ -17,3 +17,7 @@ Shared 16 KiB layout, checked linear/physical region and RX descriptor generatio
 ## Engine control
 
 Shared bounded RX stop, TX idle wait and TX queue stop return explicit absent/timeout/timer errors. The integrated TX timeout recovery no longer clears TXDP or re-enables a queue if stop cannot be verified. Shared stop_all attempts both engines. This is not proof of PCI bus-master isolation: the legacy disconnect and scan paths still release DMA without checking all stop results. Standalone must retain the locked allocation until engine and PCI isolation are verified. CI checkpoint 989331f passed host, target and Ethernet QEMU.
+
+## DMA lifetime contract
+
+The standalone-oriented DmaPlatform/Lease state machine requires isolation before lock, checked DOS memory range, descriptor preparation before enable, and verified stop plus isolation before unlock. Failure keeps the lock until successful retry. The provider adds ring-0 service 4 `dma_master(slot,consumer,enable)` with owner checks and verified PCI command bits on both bridge and AR2413. PCI readback alone is not a DMA drain guarantee; the future resident platform must implement the drain contract. Existing integrated scan/disconnect paths have not been migrated.

@@ -33,6 +33,24 @@ pub struct Hardware { slot:u8, resources:SlotResources, linear:u32, child:ChildL
 impl Hardware {
     pub fn new(slot:u8,resources:SlotResources)->Self{Self{slot,resources,linear:0,child:ChildLease::new(resources.sec_bus)}}
     pub fn mapped(&self)->u32{self.linear}
+    pub fn set_dma_master(&mut self,enable:bool)->bool{
+        use ferric_cardbus::child::set_master;
+        let mut child=ChildIo(self.resources.sec_bus);
+        if enable {
+            if self.child.child().is_none()||child.read(0)!=0x001a168c{return false;}
+            if set_master(self,true).is_err(){return false;}
+            if set_master(&mut child,true).is_err(){
+                let _=set_master(&mut child,false);
+                let _=set_master(self,false);
+                return false;
+            }
+            true
+        }else{
+            let a=set_master(&mut child,false);
+            let b=set_master(self,false);
+            a.is_ok()&&b.is_ok()
+        }
+    }
     pub fn child(&self)->Option<Child>{self.child.child()}
     pub fn socket_state(&self)->u32{self.r32(8)}
     pub fn socket_control(&self)->u32{self.r32(0x10)}

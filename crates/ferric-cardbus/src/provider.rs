@@ -79,4 +79,5 @@ impl Session {
         self.lease.release(io).map_err(|_|Error::Cleanup)
     }
     pub fn is_held(&self)->bool{self.lease.is_held()}
+    pub fn consumer_is(&self,id:u16)->bool{self.ready&&self.lease.consumer_is(id)}
 }

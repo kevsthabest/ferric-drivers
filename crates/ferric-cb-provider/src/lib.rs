@@ -80,7 +80,18 @@ pub extern "C" fn cb_acquire(slot:u32,consumer:u32)->u32 {
 pub extern "C" fn cb_release(slot:u32,consumer:u32)->u32 {
     if slot>=2 || consumer==0 || consumer>0xffff{return 1;}
     let Some(a)=slots()[slot as usize].as_mut() else{return 4;};
+    if !a.session.consumer_is(consumer as u16){return 4;}
+    if !a.hw.set_dma_master(false){return 2;}
     if a.session.detach(consumer as u16).is_ok(){0}else{4}
+}
+/// Ring-0 consumer only. Caller must lock and initialize descriptors before
+/// enabling, and verify engine stop/drain before releasing DMA memory.
+#[unsafe(no_mangle)]
+pub extern "C" fn cb_dma_master(slot:u32,consumer:u32,enable:u32)->u32{
+    if slot>=2||consumer!=0xfd0a||enable>1{return 1;}
+    let Some(a)=slots()[slot as usize].as_mut()else{return 5;};
+    if !a.session.consumer_is(consumer as u16){return 4;}
+    if a.hw.set_dma_master(enable!=0){0}else{2}
 }
 struct AuditPci;
 impl ferric_cardbus::audit::PciRead for AuditPci {

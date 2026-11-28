@@ -57,3 +57,5 @@ The shared child layer recognizes only AR2413 (168C:001A, network class, type-0 
 ## Resident child lease
 
 The transaction coordinator now acquires the AR2413 BDF, retains a reversible child snapshot, verifies memory-only configuration, and restores the child before powering down the socket. The provider retains the BDF claim through failed cleanup; the Atheros consumer (FD0A) borrows the bridge-owned child through the session. Query reports stage 5 only for a present powered child. Activation remains unexported; child bus mastering and physical removal recovery are not implemented. CI checkpoint 670fc4c passed.
+
+Service 4 (additive ABI 1.0; require service count >=5) sets child and bridge bus mastering for the registered FD0A consumer. Release first disables mastering. A failed readback prevents release. Caller remains responsible for DMA lock, engine shutdown and outstanding transaction drain. No DOS activation path is exported.

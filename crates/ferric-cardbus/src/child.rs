@@ -151,3 +151,33 @@ mod lease_tests {
         assert_eq!(l.setup(&mut m,r),Err(Error::Readback));assert!(!l.is_held());assert_eq!(m.regs[1]&7,0);
     }
 }
+
+/// Change PCI mastering without echoing W1C status. Both bridge and child
+/// must be owned by the registered consumer's provider. A failed enable
+/// may have taken effect; callers must execute disable before releasing DMA.
+pub fn set_master(io:&mut impl ConfigIo,enable:bool)->Result<(),Error>{
+    let cmd=io.read(4);
+    if cmd==u32::MAX{return Err(Error::Absent);}
+    if enable && cmd&3!=2{return Err(Error::Active);}
+    let next=if enable{cmd|4}else{cmd&!4};
+    io.write(4,next&0xffff);
+    let got=io.read(4);
+    if got==u32::MAX||got&4!=next&4{return Err(Error::Readback);}
+    Ok(())
+}
+#[cfg(test)]
+mod master_tests{
+    use super::*;
+    struct Mock(u32,bool);
+    impl ConfigIo for Mock{
+        fn read(&mut self,_:u8)->u32{self.0}
+        fn write(&mut self,_:u8,v:u32){assert_eq!(v>>16,0);if !self.1{self.0=v;}}
+    }
+    #[test]fn verify_master_and_refuse_absent(){
+        let mut m=Mock(0xabcd0002,false);
+        set_master(&mut m,true).unwrap();assert_eq!(m.0,6);
+        m.1=true;assert_eq!(set_master(&mut m,false),Err(Error::Readback));
+        m.1=false;set_master(&mut m,false).unwrap();assert_eq!(m.0,2);
+        m.0=u32::MAX;assert_eq!(set_master(&mut m,false),Err(Error::Absent));
+    }
+}
