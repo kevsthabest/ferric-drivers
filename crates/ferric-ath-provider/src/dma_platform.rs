@@ -64,3 +64,11 @@ impl ferric_ath5k::scan::ScanIo for ScanAdapter<'_>{
         true
     }
 }
+
+impl ferric_ath5k::transport::TransportIo for ScanAdapter<'_>{
+    fn copy_tx(&mut self,o:usize,src:&[u8])->bool{
+        if o.checked_add(src.len()).is_none_or(|e|e>WIFI_DMA_SIZE){return false;}
+        for (i,v) in src.iter().enumerate(){unsafe{core::ptr::write_volatile((self.region.linear as usize+o+i)as *mut u8,*v)}}
+        true
+    }
+}

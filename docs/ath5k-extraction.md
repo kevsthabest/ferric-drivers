@@ -49,3 +49,7 @@ Shared packet conversion/classification now serves integrated TX/RX classificati
 ## Integration status
 
 The resident probe checkpoint 44ac8d5 passed CI. The subsequent DMA, scan, WPA2 and packet-boundary work is experimental; aggregate CI must pass before physical use. CardBus independently refuses activation and DMA mastering until authorization and qualification. No DOS packet stub is installed by ATH5K.JLM. Existing integrated runtime remains separate for now.
+
+## Polled transport
+
+Shared transport implements TX descriptor preparation, QCU idle check, bounded ACK polling and RX ring consumption; station address and key-cache setup follow legacy register sequences. Resident ScanAdapter implements the transport DMA copy contract. Hardware connection not yet invoked. Legacy hardware routines remain in place pending regression qualification.
