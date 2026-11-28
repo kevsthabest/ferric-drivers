@@ -8,7 +8,7 @@ in the public repository.
 ## Build gate
 
 - Run scripts/test-drivers.sh inside the pinned container; all host tests and
-  target builds must pass. Record the six JLM hashes.
+  target builds must pass. Record all eight JLM hashes.
 - Boot disposable DOS media first; never replace the known-good Ferric DOS
   configuration. Test standalone modules without FERRIC.JLM.
 - Load and unload each module repeatedly; missing devices and dependencies
@@ -39,6 +39,13 @@ test media and compare captured sector contents, not merely a success string.
 Do not assume hot-swapping without reinitialization is supported.
 The temporary load guard does not detect unrelated third-party TSRs and
 cannot prevent an older integrated FERRIC build being loaded second.
+
+## Standalone Intel Ethernet acceptance
+
+See [Ethernet](drivers/ethernet.md). CI runs a separate public FreeDOS image
+with FRES and I8255X only, two packet exchange/install cycles, missing
+broker, absent NIC, and signature removal. Physical tests and DPMI client
+coverage remain separate release gates. Record QEMU logs and exact hashes.
 
 ## Future extraction gate
 

@@ -23,3 +23,10 @@ Remaining slices, in order:
 
 Do not remove the integrated backend until physical qualification and
 opt-in Ferric DOS integration are approved.
+
+## Standalone checkpoint
+
+The standalone adapter and installer now share the legacy packet facade
+and device implementation. See [Ethernet usage and limitations](drivers/ethernet.md).
+CI builds the module and runs the independent FreeDOS/QEMU gate.
+Physical throughput and compatibility qualification remain outstanding.

@@ -16,13 +16,14 @@ docker build -t ferric-drivers-build .
 docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-drivers.sh
 ```
 
-The script runs host unit tests for all twelve workspace crates, builds seven
+The script runs host unit tests for all thirteen workspace crates, builds eight
 JLMs and their DOS clients using the existing per-module purity checks,
 and prints artifact hashes. Use `--host-only` for native unit tests only,
 or `sh scripts/build-drivers.sh` for target builds only. The external
 VSBHDA backend is excluded: its separate source checkouts are documented
-in drivers/vsbhda/README.md. These scripts do not boot a DOS image or
-qualify real hardware. See [qualification.md](qualification.md).
+in drivers/vsbhda/README.md. The build/test scripts do not boot a DOS image or qualify real hardware.
+Run `sh scripts/test-ethernet-qemu.sh` separately after building, inside
+ the pinned container, for standalone Ethernet runtime smoke tests. See [qualification.md](qualification.md).
 
 ## Building one driver at a time
 
@@ -38,6 +39,7 @@ to be built first.
 | `sh crates/ferric-ntfs/build.sh` | `out/NTFS.JLM` |
 | `sh crates/ferric-vbe/build.sh` | `out/VBE.JLM` |
 | `sh crates/ferric-pmu/build.sh` | `out/PMU.JLM` (standalone ALi M7101 PMU, `0xFD05` — no `FERRIC.JLM` required) |
+| `sh crates/ferric-ethernet/build.sh` | `out/I8255X.JLM`, `out/ETHINIT.COM` (requires FRES, not FERRIC) |
 | `sh crates/ferric-res/build.sh` | `out/FRES.JLM` (resident resource broker, `0xFD07`) |
 | `sh crates/ferric-sd/build.sh` | `out/TOSHSD.JLM` (standalone Toshiba TC6371AF SD slot, `0xFD06` — requires `FRES.JLM`, not `FERRIC.JLM`) |
 | `sh crates/cbprobe/build.sh` | The `.COM` client tools in `out/` |
@@ -94,7 +96,7 @@ modules follow the same shape):
    Watcom `wlink` into a PE32 DLL.
 6. PX-patch the DLL into the final `.JLM` file under `out/`.
 
-Outputs land in `out/` at the repository root (`FRES.JLM`, `FERRIC.JLM`,
+Outputs land in `out/` at the repository root (`FRES.JLM`, `I8255X.JLM`, `FERRIC.JLM`,
 `EXFAT.JLM`, `NTFS.JLM`, `VBE.JLM`, `PMU.JLM`, `TOSHSD.JLM`, plus the `.COM` clients from
 `crates/cbprobe/build.sh`, which is NASM-only).
 
@@ -116,6 +118,6 @@ Stated plainly, so nobody has to discover it by failing:
   prerequisites (see the README); the parent project's image
   pipeline fetches them separately, and so must any user of these
   drivers.
-- The workspace `Cargo.toml` covers the twelve driver and shared-library crates.
+- The workspace `Cargo.toml` covers the thirteen driver and shared-library crates.
   The parent project's workspace also contains non-driver crates
   (`hwscan`, `ali-probe`, `pwr-probe`) that are not published here.

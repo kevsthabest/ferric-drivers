@@ -1,44 +1,61 @@
-# Ethernet — Intel 82550 packet driver
+# Intel 8255x standalone packet driver — I8255X.JLM
 
-A packet driver for the **Intel 82550** Fast Ethernet controller
-(`8086:1229`), resident in the core JLM (`crates/gate1-svc/src/lib.rs`,
-the packet-driver section) rather than a module of its own. DOS
-network stacks talk to it through the classic Crynwr packet-driver
-interface at `INT 60h`, exactly as they would to a conventional
-packet driver — mTCP's DHCP, PING, and FTPSRV were the acceptance
-workload on real hardware.
+Experimental Stage I.2 module, DDB FD08. Requires FreeDOS/JemmEx or
+Jemm386 with JLOAD 5.87, and FRES.JLM ABI 1.0. Does not require FERRIC.JLM.
+The same packet facade and hardware implementation are shared with the
+integrated driver. Supported PCI IDs initially remain 8086:1229 and
+8086:1209, bus 0 function 0, firmware-assigned 64-byte I/O BAR and IRQ.
+Other chip variants/bridged devices have not been qualified.
 
-## Scope
+## Load
 
-- **Intel 82550 only.** No other Ethernet chip is supported; the
-  register programming is 8255x-specific throughout.
-- The driver is one backend of the core's shared packet-driver
-  facade (see [core.md](core.md)); the Wi-Fi backend can take over
-  `INT 60h` at runtime (verb `0x000E`) and hand it back.
+Boot a separate DOS configuration with `DEVICE=JEMMEX.EXE NOEMS D=64`.
+Do not load the integrated FERRIC.JLM or another packet driver at INT 60h.
+Copy FRES.JLM, I8255X.JLM, ETHINIT.COM and optionally NTEST.COM from the
+same build. Load from a normal DOS prompt:
 
-## Provenance
+```bat
+JLOAD FRES.JLM
+JLOAD I8255X.JLM
+ETHINIT
+```
 
-Spec-derived, not a port: the driver was written from Intel's
-**8255x Open Source Software Developer's Manual** (the SDM's
-interrupt discipline — read SCB Stat/Ack, ignore the interrupt if
-it isn't ours, acknowledge at the device, chain always — is the
-design's law). See `NOTICES.md`.
+ETHINIT status 0 means initialized; 1 no usable NIC, 2 allocation failure,
+3 initialization failed before DMA ownership was retained, 4 already
+installed or occupied vector, 5 DMA quarantined (reboot before retry),
+9 module unavailable. Configure mTCP with PACKETINT 0x60; use DHCP
+as appropriate for the LAN. NTEST specifically targets QEMU's slirp
+gateway (10.0.2.2), not an arbitrary physical LAN.
 
-## Verbs and clients
+## Stop
 
-- `0x0003` — packet-driver probe/info
-- `0x0005` — copy the real-mode packet stub into the caller's buffer
-- `0x0006` — bring the NIC up on the caller's DMA block
-- `0x0007` — record the incumbent `INT 60h` vector for clean detach
+Exit packet clients first so their receiver handles are released.
+```bat
+JLOAD -u I8255X.JLM
+JLOAD -u FRES.JLM
+```
+A busy or uncertain teardown refuses unload. The packet stub and DOS
+allocations are deliberately retained until reboot, even after successful
+device teardown, to avoid freeing cached vector targets. This is not a
+zero-leak TSR lifecycle; repeated installations consume conventional RAM.
+The broker coordinates participating modules, not unrelated third-party TSRs.
+The IRQ hook claims only NIC-owned interrupts; non-owned interrupts chain.
+The initial release supports real-mode DOS clients. DPMI clients and physical
+IRQ sharing still require qualification.
 
-Clients (in `crates/cbprobe`): **NETINIT.COM** installs the driver
-at boot; **NTEST.COM** is the diagnostic client (link state, MAC,
-IRQ count, ARP probe).
+## Build and test
 
-## Evidence
+```sh
+sh crates/ferric-res/build.sh
+sh crates/ferric-ethernet/build.sh
+sh crates/gate1-svc/build.sh # builds NTEST.COM, not a runtime dependency
+sh scripts/test-ethernet-qemu.sh
+```
 
-Gate 2.3 passed on the DynaBook on 2026-11-21: link up on IRQ 11,
-live mTCP DHCP lease and FTPSRV transfers. See
-[`docs/hardware/dynabook-ss2000m-eth.txt`](../hardware/dynabook-ss2000m-eth.txt)
-(MAC redacted) and the
-[support-matrix excerpt](../hardware/SUPPORT-MATRIX-EXCERPT.md).
+QEMU smoke boots public FreeDOS 2046 with pinned Jemm, verifies a packet
+exchange with the emulated 82550, removal, reinstallation, missing
+dependency and absent NIC. No Ferric DOS system image is required.
+Physical acceptance: use separate boot media on the DynaBook, obtain DHCP,
+compare MAC against firmware, run bidirectional checksummed transfers
+including a 100 MiB file and multi-file workloads, then unload and reboot.
+Do not replace the known-good OS until regression qualification passes.
