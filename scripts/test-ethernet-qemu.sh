@@ -16,11 +16,11 @@ from pathlib import Path
 p = Path(sys.argv[1])
 for archive, name, dest in [
     ("kernel.zip", "kernel.sys", "KERNEL.SYS"),
-    ("source.zip", "boot.asm", "boot.asm"),
-    ("source.zip", "magic.mac", "magic.mac"),
+    ("source.zip", "boot/boot.asm", "boot.asm"),
+    ("source.zip", "boot/magic.mac", "magic.mac"),
 ]:
     with zipfile.ZipFile(p / archive) as z:
-        names = [n for n in z.namelist() if n.rsplit("/", 1)[-1].lower() == name]
+        names = [n for n in z.namelist() if n.lower().endswith("/" + name)]
         if len(names) != 1:
             raise SystemExit(f"{archive}: expected unique {name}, found {names}")
         (p / dest).write_bytes(z.read(names[0]))

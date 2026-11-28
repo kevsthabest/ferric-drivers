@@ -6,16 +6,15 @@ load with JLOAD under JemmEx/Jemm386 and run in Ring 0 alongside one
 foreground DOS program, serving DOS clients through a V86 verb API.
 
 This repository publishes the driver set on its own. The drivers were
-developed as part of a larger DOS platform and keep that shape: one
-resident core module hosts several drivers, and a few satellite
-modules plug into the core. Each driver set has its own section under
+developed as part of a larger DOS platform and keep that shape: a compatibility core hosts the original drivers while Stage I extracts
+independently loadable modules. Each driver set has its own section under
 [`docs/drivers/`](docs/drivers/).
 
 ## Development roadmap
 
 [PLANS.md](PLANS.md) tracks Stage I: independently loadable drivers, qualification and eventual opt-in integration into Ferric DOS. The existing integrated core remains the compatibility baseline.
 
-**Current safety restriction:** use either `FERRIC.JLM` or the standalone `PMU.JLM` / `TOSHSD.JLM` modules, not both. Stage I builds reject the conflicting load in either order using Jemm's device lookup; this is a temporary compatibility guard, not global PCI ownership. The guard requires the updated integrated core if it is loaded second.
+**Current safety restriction:** use either `FERRIC.JLM` or the standalone `PMU.JLM` / `TOSHSD.JLM` / `I8255X.JLM` modules, not both. Stage I builds reject the conflicting load in either order using Jemm's device lookup; this is a temporary compatibility guard, not global PCI ownership. The guard requires the updated integrated core if it is loaded second.
 
 ## Prerequisites
 
@@ -36,7 +35,8 @@ modules plug into the core. Each driver set has its own section under
 | Section | Module(s) | What it drives |
 | --- | --- | --- |
 | [Core](docs/drivers/core.md) | `FERRIC.JLM` (DDB `0xFD01`) | The resident core: verb dispatch, the block-service table, the shared packet-driver facade, and the host for the Ethernet, Wi-Fi, USB, and audio drivers below |
-| [Ethernet](docs/drivers/ethernet.md) | in the core | Intel 82550 Fast Ethernet behind a Crynwr-style packet-driver interface (`INT 60h`) |
+| [Resource broker](docs/resource-broker.md) | `FRES.JLM` (`0xFD07`) | Resident resource ownership for participating drivers |
+| [Ethernet](docs/drivers/ethernet.md) | `I8255X.JLM` (`0xFD08`, experimental), or in the core | Intel 82550 Fast Ethernet behind a Crynwr-style packet-driver interface (`INT 60h`) |
 | [Wi-Fi](docs/drivers/wifi.md) | in the core + `wifi-core` crate | Toshiba ToPIC95-family CardBus bridge + Atheros AR2413 (D-Link DWL-G630) with a WPA2-PSK supplicant |
 | [USB](docs/drivers/usb.md) | in the core + `ferric-ehci` crate | OHCI host controller with HID and mass-storage classes; EHCI (USB 2.0) bring-up and companion routing |
 | [Filesystems](docs/drivers/filesystems.md) | `EXFAT.JLM` (`0xFD02`), `NTFS.JLM` (`0xFD03`) | exFAT (read/write, with an INT 2Fh redirector) and NTFS (read-only) on top of the core's block services |
@@ -44,6 +44,8 @@ modules plug into the core. Each driver set has its own section under
 | [Audio](docs/drivers/audio.md) | in the core + [`drivers/vsbhda/`](drivers/vsbhda/) | ALi M5451 AC'97 with built-in Sound Blaster Pro / OPL / SoundFont support, plus a standalone 32-bit VSBHDA backend (`ALI5451.DRV`) |
 | [Power Management](docs/drivers/pmu.md) | `PMU.JLM` (`0xFD05`) | Standalone ALi M7101 PMU driver: Smart Battery telemetry (SMBus), CPU clock throttling (`P_CNTRL`), and LCD CCFT backlight PWM (`PWRCTL.COM`) |
 | [Toshiba SD Slot](docs/drivers/sd.md) | `TOSHSD.JLM` (`0xFD06`) | Standalone read-only Toshiba TC6371AF (`1179:0805` / `1179:0803`) built-in SD card slot driver (`SDPROBE.COM`) |
+
+Standalone Ethernet requires FRES.JLM, then I8255X.JLM and ETHINIT.COM. The development branch has passed host tests and eight target builds; the emulator gate is not yet passing. See [qualification](docs/qualification.md) and [CI artifacts](https://github.com/kevsthabest/ferric-drivers/actions).
 
 Hardware evidence — what was proven on the development machine, and
 the limits that come with it — is in
@@ -55,7 +57,7 @@ These are drivers for **specific chips**, developed and proven on one
 machine (a Toshiba DynaBook SS 2000M, Pentium III-M). They are not
 drop-in drivers for arbitrary FreeDOS + Jemm machines:
 
-- **Ethernet** supports the **Intel 82550 only** (`8086:1229`).
+- **Ethernet** supports the **Intel 8255x** IDs `8086:1229` (legacy physical evidence) and `8086:1209` (QEMU target). Standalone runtime qualification is pending.
 - **Wi-Fi** supports the **Toshiba ToPIC95-family CardBus bridge**
   (`1179:0617`) with an **Atheros AR2413** card (developed against the
   D-Link DWL-G630 Rev C2, `168C:001A`), 2.4 GHz, **WPA2-PSK only**.

@@ -7,7 +7,7 @@ No new hardware IDs or packet API claims follow from this change.
 
 DMA geometry and serial protocols (EEPROM, MDI/PHY) now also live in the shared crate. The legacy core uses thin port-I/O adapters. Host tests cover descriptor wrap and overflow, EEPROM checksum and fallback, Microwire read sequence, and PHY latch-low and timeout behavior.
 
-Remaining slices, in order:
+Implementation slices (1–4 implemented experimentally; 5 remains):
 1. Complete descriptor encoding and wire the checked DMA address model into hardware initialization.
 2. Isolate hardware state from NetState's packet registrations and Wi-Fi
    backend selection. Keep packet facade registration and callback delivery
@@ -28,5 +28,5 @@ opt-in Ferric DOS integration are approved.
 
 The standalone adapter and installer now share the legacy packet facade
 and device implementation. See [Ethernet usage and limitations](drivers/ethernet.md).
-CI builds the module and runs the independent FreeDOS/QEMU gate.
+CI builds the module and runs the independent FreeDOS/QEMU gate. At 96f519d, all host tests and eight target builds passed; the smoke test stopped before boot on ambiguous upstream archive paths. The archive selection has been corrected; runtime results remain pending.
 Physical throughput and compatibility qualification remain outstanding.

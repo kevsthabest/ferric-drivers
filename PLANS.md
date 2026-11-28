@@ -11,10 +11,10 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 ## Execution order
 | Phase | Deliverable | Status |
 |---|---|---|
-| I.0 | Roadmap, safety fixes, independent build/test entry point | Active |
+| I.0 | Roadmap, safety fixes, independent build/test entry point | Implemented; qualification ongoing |
 | I.1 | Shared no_std PCI/MMIO/IRQ/DMA/time and device ownership interfaces | Active |
 | I.2 | Independent Intel 8255x module and packet facade | Experimental implementation; runtime qualification |
-| I.3 | CardBus provider and Atheros module | Planned |
+| I.3 | CardBus provider and Atheros module | Design / initial extraction |
 | I.4 | PS/2 and USB mouse service with INT 33h ownership | Planned |
 | I.5 | OHCI and EHCI providers, common USB enumeration/storage/HID | Planned |
 | I.6 | Native ALi audio and optional SB/OPL/MIDI services | Planned |
@@ -71,9 +71,13 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.2: standalone I8255X.JLM (FD08) and ETHINIT.COM implemented; shared packet facade with legacy core; first target build passed at `6f25bd8` (11,776-byte JLM). Subsequent lifecycle fixes and QEMU smoke gate pending validation.
 
+- CI `96f519d`: host tests and all eight target builds passed; QEMU harness stopped before boot because upstream source archive contains two boot.asm files. Select boot/boot.asm explicitly. No emulator result yet. Artifacts uploaded in run 46086383312.
+
 ## Immediate backlog
+- Ethernet: rerun QEMU smoke after archive selection fix; verify real packet exchange and lifecycle before release.
+- I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.
 - Validate temporary standalone PMU/SD exclusion in both load orders; replace whole-module exclusion with per-device ownership in I.1.
-- Execute standalone build/test entry point and module acceptance matrix. Existing purity checks are not runtime qualification.
+- Execute remaining standalone runtime and physical acceptance matrix. Existing purity checks are not runtime qualification.
 - Investigate PCI allocator and calibrated timing before broad hardware claims.

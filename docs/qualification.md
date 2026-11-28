@@ -54,3 +54,7 @@ negative cases, device-specific physical testing, and comparison with the
 integrated known-good profile. Test standard DOS clients on both real-mode
 and protected-mode paths as relevant. QEMU results qualify virtual hardware
 only; lack of an emulated device is recorded, not counted as a pass.
+
+## Evidence checkpoint
+
+2026-11-27, branch revision `96f519d`: [CI run 46086383312](https://github.com/kevsthabest/ferric-drivers/actions/runs/46086383312) passed host and target build steps; QEMU did not boot due to ambiguous upstream boot.asm archive entry. No runtime pass claimed. [Experimental build artifacts](https://github.com/kevsthabest/ferric-drivers/actions/runs/46086383312/artifacts/15238968623).
