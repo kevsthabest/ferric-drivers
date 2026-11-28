@@ -80,6 +80,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - CI checkpoint `47c2324`: all host tests and eight target builds passed; independent Ethernet QEMU positive and negative cases passed (two installs and ARP exchanges, unload/reinstall, missing broker and NIC). Physical acceptance remains pending.
 - I.3: transactional four-resource lease with reverse-order rollback and consumer pinning; mock tests cover every partial acquisition and failed release retry.
 
+- I.3: added mock-tested inactive bridge configuration snapshot, reset-asserted staging and verified restoration, with PCI status W1C protection. Not wired to physical hardware; full bridge/vendor register coverage and power sequencing pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.
