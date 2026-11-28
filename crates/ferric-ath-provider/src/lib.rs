@@ -11,6 +11,7 @@ mod registers;
 mod dma_platform;
 mod session;
 mod nonce;
+mod packet_api;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo)->!{loop{}}
@@ -156,6 +157,7 @@ pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
 pub extern "C" fn ath_shutdown()->u32{
     let s=state();
     let Some(slot)=s.slot else{return 0;};
+    if packet_api::ath_packet_busy()!=0{return 2;}
     // Disable application data before attempting shutdown, even on failure.
     s.link=None;
     if !s.dma.can_unload(){
