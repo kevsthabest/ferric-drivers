@@ -66,3 +66,6 @@ A capture-derived runtime fingerprint detects changed BARs, bridge routing and A
 
 ## Activation preflight and rollback tests
 The experimental start entry now permits only slot 0 and requires both PCI audit and the exact capture fingerprint, followed by the independent resource evidence validator. Its root-window list remains empty and completeness false, so activation cannot proceed. The same occupied ranges and buses are passed into Session rather than empty slices. Mock tests cover successful attach/detach, consumer pinning, partial map/child failures and retry of failed rollback. Corrected graphics window length to 0x06100000 (inclusive end FDFFFFFF). These are software tests, not physical activation evidence.
+
+## Gate C command interface (still gated)
+CBSTART.COM invokes FD09 AX=0Bh BX=0 (only slot zero). Status 0 means ready, 1 invalid, 2 busy, 5 preflight or clean transaction failure, 6 incomplete independent authorization, 7 retained cleanup, 8 ABI error, 9 provider missing. CBSTOP.COM invokes AX=0Dh; 0 is stopped/already stopped, 2 is consumer pinned, 7 is retained cleanup. Stop ATH5K first, then CBSTOP; never force unload after status 7. No override exists and current evidence remains incomplete. QEMU absent-hardware tests exercise both commands. The DOS query destination is restricted to conventional RAM and cannot overlap the IVT/BDA.

@@ -1,7 +1,7 @@
 ; CARDBUS.JLM experimental discovery provider (FD09).
 cpu 386
 bits 32
-extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown, cb_audit, cb_dma_master
+extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown, cb_audit, cb_dma_master, cb_start_audited
 %define VMM_PAGE_FREE 0x12
 %define VMM_PAGE_RESERVE 0x27
 %define VMM_PAGE_COMMIT_PHYS 0x2A
@@ -144,6 +144,10 @@ dispatch:
  je .query
  cmp eax,0x0a
  je .audit
+ cmp eax,0x0b
+ je .start
+ cmp eax,0x0d
+ je .stop
  jmp .bad
 .ping:
  mov word [ebp+28],1
@@ -160,6 +164,17 @@ dispatch:
  add esp,4
  mov [ebp+28],eax
  jmp .done
+.start:
+ movzx eax,word [ebp+16]
+ push eax
+ call cb_start_audited
+ add esp,4
+ mov [ebp+28],eax
+ jmp .done
+.stop:
+ call cb_shutdown
+ mov [ebp+28],eax
+ jmp .done
 .query:
  movzx eax,word [ebp+60]
  shl eax,4
@@ -167,9 +182,9 @@ dispatch:
  cmp edx,0xFFD8
  ja .bad
  add eax,edx
- test eax,eax
- jz .bad
- cmp eax,0xFFFD8
+ cmp eax,0x500
+ jb .bad
+ cmp eax,0x9FFD8
  ja .bad
  push eax
  movzx eax,word [ebp+16]

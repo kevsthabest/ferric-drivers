@@ -107,11 +107,15 @@ def main():
     ])
 
     run(base, output, "wireless-gates", [
+        "CBSTART > COM1",
+        "CBSTOP > COM1",
         "ATHDIAG > COM1",
         "JLOAD FRES.JLM",
         "JLOAD ATH5K.JLM",
         "ATHDIAG > COM1",
         "JLOAD CARDBUS.JLM",
+        "CBSTART > COM1",
+        "CBSTOP > COM1",
         "JLOAD ATH5K.JLM",
         "ATHDIAG > COM1",
         "ATHINIT > COM1",
@@ -126,6 +130,9 @@ def main():
     ], False, lambda s: [
         ("missing dependencies refused and unload", s.count("ATHDIAG: resident=9") == 3),
         ("provider loads", s.count("ATHDIAG: resident=0") == 1),
+        ("CardBus absent provider", "CBSTART: status=9" in s and "CBSTOP: status=9" in s),
+        ("CardBus preflight refused", "CBSTART: status=5" in s),
+        ("CardBus stop idempotent", "CBSTOP: status=0" in s),
         ("no bridge", "ATHDIAG: bridges=0" in s),
         ("no powered child", "ATHDIAG: probe=5" in s),
         ("no packet installation", "ATHDIAG: install=5" in s and "ATHINIT: status=5" in s),

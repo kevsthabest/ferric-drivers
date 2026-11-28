@@ -105,8 +105,8 @@ pub extern "C" fn cb_audit(slot:u32)->u32{
     let Some(r)=ferric_cardbus::slot_resources(slot as usize)else{return 1;};
     ferric_cardbus::audit::inspect(&mut AuditPci,slot as u8,r) as u32
 }
-/// Experimental start entry for a future audited-resource caller. Not exported
-/// as a Jemm service yet; no path from DOS can activate it in this revision.
+/// Slot-zero gated start: 0 ready, 1 invalid, 2 busy, 5 preflight or
+/// transaction failed, 6 incomplete authorization, 7 cleanup retained.
 #[unsafe(no_mangle)]
 pub extern "C" fn cb_start_audited(slot:u32)->u32 {
     if slot!=0{return 1;}
@@ -129,11 +129,11 @@ pub extern "C" fn cb_start_audited(slot:u32)->u32 {
     let mut a=Active{session,hw:Hardware::new(slot as u8,r)};
     let result=a.session.start(&mut a.hw,info.rev);
     if a.session.is_held(){*cell=Some(a);}
-    if result.is_ok(){0}else{5}
+    if result.is_ok(){0}else if cell.is_some(){7}else{5}
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn cb_shutdown()->u32 {
-    for cell in slots(){if let Some(a)=cell.as_mut(){if a.session.stop(&mut a.hw).is_err(){return 2;}*cell=None;}}
+    for cell in slots(){if let Some(a)=cell.as_mut(){if let Err(e)=a.session.stop(&mut a.hw){return if e==ferric_cardbus::provider::Error::Consumer{2}else{7};}*cell=None;}}
     0
 }
 #[cfg(test)]

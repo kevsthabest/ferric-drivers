@@ -7,6 +7,8 @@ cd "${ROOT_DIR}"
 
 OUT_DIR="${ROOT_DIR}/out"
 mkdir -p "${OUT_DIR}"
+nasm -f bin -o out/CBSTART.COM crates/ferric-cb-provider/asm/cbstart.asm
+nasm -f bin -o out/CBSTOP.COM crates/ferric-cb-provider/asm/cbstop.asm
 
 
 
@@ -27,7 +29,7 @@ python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 echo "[ferric-cb-provider] 3/5 Converting ELF32->COFF and assembling cb_jlm.asm..."
 python3 crates/gate1-svc/elf32_to_coff.py "${JLM_RUST_OBJ}" "${JLM_RUST_COFF}"
 nasm -f win32 -o "${JLM_STUB_OBJ}" crates/ferric-cb-provider/asm/cb_jlm.asm
-python3 scripts/check_asm_purity.py crates/ferric-cb-provider/asm/cb_jlm.asm
+python3 scripts/check_asm_purity.py crates/ferric-cb-provider/asm/cb_jlm.asm crates/ferric-cb-provider/asm/cbstart.asm crates/ferric-cb-provider/asm/cbstop.asm
 
 echo "[ferric-cb-provider] 4/5 Linking relocatable PE32 JLM out/CARDBUS.DLL and PX-patching..."
 wlink format windows nt dll runtime native     file "${JLM_STUB_OBJ},${JLM_RUST_COFF}"     name "${JLM_DLL}"     option start=DllMain,quiet     export _ddb.1
