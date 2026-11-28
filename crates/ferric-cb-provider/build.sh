@@ -21,7 +21,7 @@ JLM_DLL="${OUT_DIR}/CARDBUS.DLL"
 JLM_PX="${OUT_DIR}/CARDBUS.JLM"
 
 echo "[ferric-cb-provider] 2/5 Partial-linking Rust object and verifying 386 purity..."
-ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u cb_version -u cb_probe_count -u cb_query -u cb_acquire -u cb_release "${LIB_A}" -o "${JLM_RUST_OBJ}"
+ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u cb_version -u cb_probe_count -u cb_query -u cb_acquire -u cb_release -u cb_start_audited -u cb_shutdown "${LIB_A}" -o "${JLM_RUST_OBJ}"
 python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 
 echo "[ferric-cb-provider] 3/5 Converting ELF32->COFF and assembling cb_jlm.asm..."

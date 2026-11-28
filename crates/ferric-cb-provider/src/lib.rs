@@ -4,6 +4,15 @@
 #![deny(warnings)]
 use ferric_cardbus::{CardBusSlotInfo, TOPIC95_DID, TOPIC95_VID, TOPIC95_PCI_DEV};
 use ferric_hw::pci::read32;
+mod platform;
+use platform::Hardware;
+use ferric_cardbus::provider::Session;
+use core::cell::UnsafeCell;
+struct Active { session:Session, hw:Hardware }
+struct Slots(UnsafeCell<[Option<Active>;2]>);
+unsafe impl Sync for Slots {}
+static SLOTS:Slots=Slots(UnsafeCell::new([None,None]));
+fn slots()->&'static mut [Option<Active>;2]{unsafe{&mut *SLOTS.0.get()}}
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! { loop {} }
@@ -35,15 +44,44 @@ pub extern "C" fn cb_probe_count()->u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cb_query(slot:u32,dst:*mut u8)->u32 {
     if slot>=2 || dst.is_null() { return 0; }
-    let info=discover(slot,|f,o| unsafe { read32(0,TOPIC95_PCI_DEV,f,o) });
+    let mut info=discover(slot,|f,o| unsafe { read32(0,TOPIC95_PCI_DEV,f,o) });
+    if let Some(a)=&slots()[slot as usize] { info.bar0_lin=a.hw.mapped(); }
     unsafe { core::ptr::copy_nonoverlapping((&info as *const CardBusSlotInfo).cast::<u8>(),dst,40) };
     1
 }
 /// Activation deliberately fails closed until resource discovery is qualified.
 #[unsafe(no_mangle)]
-pub extern "C" fn cb_acquire(_slot:u32,_consumer:u32)->u32 { 5 }
+pub extern "C" fn cb_acquire(slot:u32,consumer:u32)->u32 {
+    if slot>=2 || consumer==0 || consumer>0xffff{return 1;}
+    let Some(a)=slots()[slot as usize].as_mut() else{return 5;};
+    if a.session.attach(consumer as u16).is_ok(){0}else{2}
+}
 #[unsafe(no_mangle)]
-pub extern "C" fn cb_release(_slot:u32,_consumer:u32)->u32 { 4 }
+pub extern "C" fn cb_release(slot:u32,consumer:u32)->u32 {
+    if slot>=2 || consumer==0 || consumer>0xffff{return 1;}
+    let Some(a)=slots()[slot as usize].as_mut() else{return 4;};
+    if a.session.detach(consumer as u16).is_ok(){0}else{4}
+}
+/// Experimental start entry for a future audited-resource caller. Not exported
+/// as a Jemm service yet; no path from DOS can activate it in this revision.
+#[unsafe(no_mangle)]
+pub extern "C" fn cb_start_audited(slot:u32)->u32 {
+    if slot>=2{return 1;}
+    let cell=&mut slots()[slot as usize];if cell.is_some(){return 2;}
+    let info=discover(slot,|f,o|unsafe{read32(0,TOPIC95_PCI_DEV,f,o)});
+    if info.present==0{return 1;}
+    let Some(r)=ferric_cardbus::slot_resources(slot as usize) else{return 1;};
+    let Ok(session)=Session::new(slot as u8,r,&[],&[]) else{return 1;};
+    let mut a=Active{session,hw:Hardware::new(slot as u8,r)};
+    let result=a.session.start(&mut a.hw,info.rev);
+    if a.session.is_held(){*cell=Some(a);}
+    if result.is_ok(){0}else{5}
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn cb_shutdown()->u32 {
+    for cell in slots(){if let Some(a)=cell.as_mut(){if a.session.stop(&mut a.hw).is_err(){return 2;}*cell=None;}}
+    0
+}
 #[cfg(test)]
 mod tests {
     use super::*;

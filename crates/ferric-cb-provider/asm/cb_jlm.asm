@@ -1,7 +1,12 @@
 ; CARDBUS.JLM experimental discovery provider (FD09).
 cpu 386
 bits 32
-extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release
+extern cb_version, cb_probe_count, cb_query, cb_acquire, cb_release, cb_shutdown
+%define VMM_PAGE_FREE 0x12
+%define VMM_PAGE_RESERVE 0x27
+%define VMM_PAGE_COMMIT_PHYS 0x2A
+%define PR_SYSTEM 0x80080000
+%define PC_MMIO_FLAGS 0x40120000
 %macro VMMCall 1
  int 0x20
  dw %1,1
@@ -24,6 +29,79 @@ _ddb:
  dd services,4
  dd 0,0,80,0,0,0
 section .text align=4
+global cb_map
+cb_map:
+    push ebx
+    push esi
+    mov ebx, [esp + 12]
+    mov esi, [esp + 16]
+    or esi, esi
+    jz .map_fail
+    push dword 0
+    push esi
+    push dword PR_SYSTEM
+    VMMCall VMM_PAGE_RESERVE
+    add esp, 12
+    cmp eax, 0xFFFFFFFF
+    je .map_fail
+    or eax, eax
+    jz .map_fail
+    push eax
+    mov ecx, eax
+    shr ecx, 12
+    mov edx, ebx
+    shr edx, 12
+    push dword PC_MMIO_FLAGS
+    push edx
+    push esi
+    push ecx
+    VMMCall VMM_PAGE_COMMIT_PHYS
+    add esp, 16
+    or eax, eax
+    pop eax
+    jz .commit_fail
+    pop esi
+    pop ebx
+    ret
+.commit_fail:
+    ; Release the reserved linear pages when PageCommitPhys failed.
+    push dword 0
+    push eax
+    VMMCall VMM_PAGE_FREE
+    add esp, 8
+.map_fail:
+    xor eax, eax
+    pop esi
+    pop ebx
+    ret
+
+global cb_unmap
+cb_unmap:
+    ; cdecl: PageFree takes the original linear base, flags=0.
+    push dword 0
+    push dword [esp + 8]
+    VMMCall VMM_PAGE_FREE
+    add esp, 8
+    ret
+
+
+global cb_claim, cb_unclaim
+cb_claim:
+ push dword [esp+12]
+ push dword [esp+12]
+ push dword [esp+12]
+ push dword 0xFD09
+ FRESCall 3
+ add esp,16
+ ret
+cb_unclaim:
+ push dword [esp+12]
+ push dword [esp+12]
+ push dword [esp+12]
+ push dword 0xFD09
+ FRESCall 4
+ add esp,16
+ ret
 control:
  clc
  ret
@@ -123,6 +201,9 @@ DllMain:
 .detach:
  cmp eax,0
  jne .ok
+ call cb_shutdown
+ test eax,eax
+ jnz .fail
  push dword 0xFD09
  FRESCall 2
  add esp,4

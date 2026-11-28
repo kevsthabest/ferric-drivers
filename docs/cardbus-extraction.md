@@ -37,3 +37,7 @@ CARDBUS.JLM (FD09) requires FRES. Its service table 0=version, 1=query(slot, des
 ## Transaction coordinator
 
 The pure provider Session composes the resource lease, configuration snapshot, socket mapping contract and power state machine. It pins resources when cleanup cannot be verified and refuses shutdown with a consumer attached. The configuration snapshot now includes both I/O windows and ToPIC vendor configuration. The resident module remains discovery-only pending the actual platform resource audit, mapping and physical tests.
+
+## Platform adapter checkpoint
+
+The resident crate now links the Jemm page mapping/free services, FRES claims, serialized PCI I/O, MMIO power/reset operations and a bounded PIT delay. The internal activation routine is intentionally not accessible from the Jemm service table or DOS verbs: it still requires a real resource audit rather than assuming the legacy profile is safe. The shutdown and consumer paths use the transaction coordinator. This is not an operational bridge release.

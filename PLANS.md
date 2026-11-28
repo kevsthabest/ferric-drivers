@@ -88,6 +88,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `d0d44ea`: discovery-only CARDBUS build, host tests and Ethernet QEMU passed. Added shared transaction coordinator for claims/config/map/power/rollback and reverse integrated-core FD09 conflict guard. Hardware activation still disabled.
 
+- CI `da55904`: successful host, target and Ethernet QEMU checks. I.3 resident adapter now links PCI/MMIO/FRES/PIT platform implementation and transaction coordinator; activation entry is intentionally not exported pending an actual firmware-resource audit. Consumer and shutdown paths wired to session state.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.
