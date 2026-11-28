@@ -98,6 +98,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI `670fc4c` passed. Added resident AR2413 child BDF lease, memory-only config, query and teardown integration; consumer FD0A borrows claimed child. Activation remains unexported; DMA and removal recovery pending.
 
+- CI `48a8e0c` passed. I.3 Atheros extraction begins with shared pure EEPROM/RF/descriptor/CCMP helpers; integrated code re-exports them. Standalone hardware backend remains pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

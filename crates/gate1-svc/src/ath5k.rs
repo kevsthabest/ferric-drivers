@@ -185,8 +185,8 @@ const AR5K_PHY_DAG_CCK_CTL_RSSI_THR_S: u32 = 10;
 const AR5K_PHY_BLUETOOTH: usize = 0xA254;
 
 // AR5212/AR2413 RX descriptor status bits (vendor/ref/linux-ath/ath5k/desc.h:78-94).
-const AR5K_RX_STAT0_DATA_LEN: u32 = 0x0000_0FFF;
-const AR5K_RX_STAT0_RSSI_SHIFT: u32 = 20;
+
+
 const AR5K_RX_STAT1_DONE: u32 = 0x0000_0001;
 const AR5K_RX_STAT1_OK: u32 = 0x0000_0002;
 
@@ -202,16 +202,16 @@ const AR5K_4W_TX_DESC_CTL1_ENCRYPT_KEY_IDX_S: u32 = 13;
 const AR5K_4W_TX_DESC_CTL1_NOACK: u32 = 0x0100_0000;
 const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0: u32 = 0x000F_0000;
 const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0_S: u32 = 16;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1: u32 = 0x00F0_0000;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1_S: u32 = 20;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES2: u32 = 0x0F00_0000;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES2_S: u32 = 24;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES3: u32 = 0xF000_0000;
-const AR5K_4W_TX_DESC_CTL2_XMIT_TRIES3_S: u32 = 28;
+
+
+
+
+
+
 const AR5K_4W_TX_DESC_CTL3_XMIT_RATE0: u32 = 0x0000_001F;
-const AR5K_4W_TX_DESC_CTL3_XMIT_RATE1_S: u32 = 5;
-const AR5K_4W_TX_DESC_CTL3_XMIT_RATE2_S: u32 = 10;
-const AR5K_4W_TX_DESC_CTL3_XMIT_RATE3_S: u32 = 15;
+
+
+
 const AR5K_DESC_TX_STATUS0_FRAME_XMIT_OK: u32 = 0x0000_0001;
 const AR5K_DESC_TX_STATUS1_DONE: u32 = 0x0000_0001;
 
@@ -225,7 +225,7 @@ pub const ATH5K_RATE_CODE_36M: u8 = 0x0D;
 pub const ATH5K_RATE_CODE_54M: u8 = 0x0C;
 
 // Verified SREV constants (vendor/ref/linux-ath/ath5k/ath5k.h:320-326).
-pub const AR5K_SREV_AR5212_V4: u32 = 0x54;
+
 pub const AR5K_SREV_AR5213A: u32 = 0x59;
 pub const AR5K_SREV_AR2413: u32 = 0x78;
 
@@ -234,34 +234,17 @@ const AR5K_EEPROM_MAGIC: u32 = 0x003D;
 pub const AR5K_EEPROM_MAGIC_VALUE: u16 = 0x5AA5;
 const AR5K_EEPROM_REG_DOMAIN: u32 = 0x00BF;
 const AR5K_EEPROM_VERSION: u32 = 0x00C1;
-pub const AR5K_EEPROM_VERSION_5_0: u16 = 0x5000;
+
 const AR5K_EEPROM_HDR: u32 = 0x00C2;
 const AR5K_EEPROM_MISC5: u32 = 0x00C9;
-const AR5K_EEPROM_AES_DIS_BIT: u16 = 0x0002;
+
 
 /// Determine hardware AES-CCM support per Linux `ath5k/attach.c:315-318`.
-pub const fn decode_aes_support(srev: u32, ee_version: u16, ee_misc5: u16) -> bool {
-    let mac_srev = srev & 0xFF;
-    mac_srev >= AR5K_SREV_AR5212_V4
-        && (ee_version < AR5K_EEPROM_VERSION_5_0 || (ee_misc5 & AR5K_EEPROM_AES_DIS_BIT) == 0)
-}
+pub use ferric_ath5k::decode_aes_support;
 
 /// Decode the 6-byte station MAC from EEPROM words `0x1F`, `0x1E`, `0x1D`
 /// per Linux `ath5k/pci.c:129-141`. Rejects all-zero and all-FF reads.
-pub const fn decode_eeprom_mac(w1f: u16, w1e: u16, w1d: u16) -> Option<[u8; 6]> {
-    let total = (w1f as u32) + (w1e as u32) + (w1d as u32);
-    if total == 0 || total == 3 * 0xFFFF {
-        return None;
-    }
-    Some([
-        (w1f >> 8) as u8,
-        (w1f & 0xFF) as u8,
-        (w1e >> 8) as u8,
-        (w1e & 0xFF) as u8,
-        (w1d >> 8) as u8,
-        (w1d & 0xFF) as u8,
-    ])
-}
+pub use ferric_ath5k::decode_eeprom_mac;
 
 /// Fixed 44-byte `#[repr(C)]` AR2413 probe summary returned to `WIFIPROBE.COM`
 /// via JLM V86 API `AX=0x000A`.
@@ -749,34 +732,12 @@ const fn bitswap8(mut v: u32) -> u32 {
 
 /// Compute `(rf_buf_lo, rf_buf_hi)` for RF5112/RF2413 2.4 GHz channels 1..=13
 /// (`freq = 2407 + 5 * ch` MHz) per Linux `ath5k/phy.c:1335-1373`.
-pub const fn rf5112_channel_regs(freq_mhz: u16) -> Option<(u32, u32)> {
-    if freq_mhz < 2412 || freq_mhz > 2472 || ((freq_mhz - 2192) % 5) != 0 {
-        return None;
-    }
-    let c = freq_mhz as u32;
-    let raw = ((2 * (c - 672)) - 3040) / 10;
-    let data0 = bitswap8((raw << 2) & 0xFF);
-    let data = (data0 << 4) | 0x1001;
-    Some((data & 0xFF, (data >> 8) & 0x7F))
-}
+pub use ferric_ath5k::rf5112_channel_regs;
 
 /// Decoded AR5212/AR2413 RX descriptor status words (`desc.h:78-94`).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct RxDescDecode {
-    pub done: bool,
-    pub ok: bool,
-    pub len: u16,
-    pub rssi: u8,
-}
+pub use ferric_ath5k::RxDescDecode;
 
-pub const fn decode_5212_rx_status(stat0: u32, stat1: u32) -> RxDescDecode {
-    RxDescDecode {
-        done: (stat1 & AR5K_RX_STAT1_DONE) != 0,
-        ok: (stat1 & AR5K_RX_STAT1_OK) != 0,
-        len: (stat0 & AR5K_RX_STAT0_DATA_LEN) as u16,
-        rssi: ((stat0 >> AR5K_RX_STAT0_RSSI_SHIFT) & 0xFF) as u8,
-    }
-}
+pub use ferric_ath5k::decode_5212_rx_status;
 
 /// Fixed 44-byte `#[repr(C)]` AP scan entry returned inside `WifiScanResult`.
 #[repr(C)]
@@ -916,141 +877,17 @@ unsafe fn init_rx_ring(dma_lin: u32, dma_phys: u32) {
 
 /// Decoded 11g antenna switch tables & RF settling/attenuation from EEPROM
 /// words `AR5K_EEPROM_MODES_11G(ee_ver) + 0..5` (`vendor/ref/linux-ath/ath5k/eeprom.c:189-243`).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct EepromAnts {
-    pub switch_settling: u32,
-    pub atn_tx_rx: u32,
-    pub ant_idle: u32,
-    pub swtable_a: u32,
-    pub swtable_b: u32,
-}
+pub use ferric_ath5k::EepromAnts;
 
-pub const fn decode_eeprom_ants(w: [u16; 5]) -> EepromAnts {
-    let switch_settling = ((w[0] >> 8) & 0x7F) as u32;
-    let atn_tx_rx = ((w[0] >> 2) & 0x3F) as u32;
-
-    let a0 = (((w[0] << 4) & 0x3F) | ((w[1] >> 12) & 0x0F)) as u32;
-    let a1 = ((w[1] >> 6) & 0x3F) as u32;
-    let a2 = (w[1] & 0x3F) as u32;
-    let a3 = ((w[2] >> 10) & 0x3F) as u32;
-    let a4 = ((w[2] >> 4) & 0x3F) as u32;
-    let a5 = (((w[2] << 2) & 0x3F) | ((w[3] >> 14) & 0x03)) as u32;
-    let a6 = ((w[3] >> 8) & 0x3F) as u32;
-    let a7 = ((w[3] >> 2) & 0x3F) as u32;
-    let a8 = (((w[3] << 4) & 0x3F) | ((w[4] >> 12) & 0x0F)) as u32;
-    let a9 = ((w[4] >> 6) & 0x3F) as u32;
-    let a10 = (w[4] & 0x3F) as u32;
-
-    let swtable_a = a1 | (a2 << 6) | (a3 << 12) | (a4 << 18) | (a5 << 24);
-    let swtable_b = a6 | (a7 << 6) | (a8 << 12) | (a9 << 18) | (a10 << 24);
-
-    EepromAnts {
-        switch_settling,
-        atn_tx_rx,
-        ant_idle: a0,
-        swtable_a,
-        swtable_b,
-    }
-}
+pub use ferric_ath5k::decode_eeprom_ants;
 
 /// Decoded 11g board-specific PHY calibration fields from EEPROM words
 /// immediately following the 5 antenna words (`vendor/ref/linux-ath/ath5k/eeprom.c:249-418`).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct EepromModes11g {
-    pub adc_desired_size: u8,
-    pub pga_desired_size: u8,
-    pub tx_end2xlna_enable: u8,
-    pub thr_62: u8,
-    pub tx_end2xpa_disable: u8,
-    pub tx_frm2xpa_enable: u8,
-    pub noise_floor_thr: i8,
-    pub margin_tx_rx: u8,
-    pub i_cal: u8,
-    pub q_cal: u8,
-    pub cck_ofdm_power_delta: i8,
-    pub cck_ofdm_gain_delta: i8,
-    pub ob_1: u8,
-    pub db_1: u8,
-}
+pub use ferric_ath5k::EepromModes11g;
 
 /// Pure decoder for the up to 12 EEPROM 11g mode words starting at
 /// `AR5K_EEPROM_MODES_11G(ee_ver) + 5` (`eeprom.c:249-418`).
-pub const fn decode_eeprom_modes_11g(ee_ver: u16, m: &[u16; 12]) -> EepromModes11g {
-    let adc_desired_size = ((m[0] >> 8) & 0xFF) as u8;
-    let ob_1 = ((m[0] >> 4) & 0x07) as u8;
-    let db_1 = (m[0] & 0x07) as u8;
-
-    let tx_end2xlna_enable = ((m[1] >> 8) & 0xFF) as u8;
-    let thr_62 = if ee_ver <= 0x3002 {
-        28u8
-    } else {
-        (m[1] & 0xFF) as u8
-    };
-
-    let tx_end2xpa_disable = ((m[2] >> 8) & 0xFF) as u8;
-    let tx_frm2xpa_enable = (m[2] & 0xFF) as u8;
-
-    let pga_desired_size = ((m[3] >> 8) & 0xFF) as u8;
-    let noise_floor_thr = if ee_ver <= 0x3002 {
-        -1i8
-    } else {
-        (m[3] & 0xFF) as u8 as i8
-    };
-
-    // m[4] holds xlna_gain / x_gain / xpd / fixed_bias (used by RF5111/5112).
-    // m[5] is read when ee_ver >= 0x3003 (false_detect, ob_0, db_0, i_gain_lo).
-    // m[6] is read when ee_ver >= 0x3004 (i_gain_hi, cck_ofdm_power_delta, scaled_cck_delta).
-    let mut idx = 5usize;
-    if ee_ver >= 0x3003 {
-        idx += 1;
-    }
-    let cck_ofdm_power_delta = if ee_ver >= 0x3004 {
-        let val = m[idx];
-        idx += 1;
-        ((val >> 3) & 0xFF) as u8 as i8
-    } else {
-        15i8 // AR5K_EEPROM_CCK_OFDM_DELTA
-    };
-
-    let mut margin_tx_rx = 0u8;
-    let mut i_cal = 0u8;
-    let mut q_cal = 0u8;
-    let mut cck_ofdm_gain_delta = 0i8;
-
-    if ee_ver >= 0x4000 {
-        // Skip pwr_cal_g[0..1] (m[idx]) and turbo_max_power/xr_power (m[idx+1]).
-        idx += 2;
-        // m[idx]: pwr_cal_g[2] + margin_tx_rx (ee_ver >= 0x4001).
-        if ee_ver >= 0x4001 {
-            margin_tx_rx = ((m[idx] >> 8) & 0x3F) as u8;
-        }
-        idx += 1;
-        // m[idx]: i_cal / q_cal.
-        i_cal = ((m[idx] >> 5) & 0x3F) as u8;
-        q_cal = (m[idx] & 0x1F) as u8;
-        idx += 1;
-        if ee_ver >= 0x4002 {
-            cck_ofdm_gain_delta = (m[idx] & 0xFF) as u8 as i8;
-        }
-    }
-
-    EepromModes11g {
-        adc_desired_size,
-        pga_desired_size,
-        tx_end2xlna_enable,
-        thr_62,
-        tx_end2xpa_disable,
-        tx_frm2xpa_enable,
-        noise_floor_thr,
-        margin_tx_rx,
-        i_cal,
-        q_cal,
-        cck_ofdm_power_delta,
-        cck_ofdm_gain_delta,
-        ob_1,
-        db_1,
-    }
-}
+pub use ferric_ath5k::decode_eeprom_modes_11g;
 
 /// Verify the AR2413 EEPROM XOR checksum (`0x00C0..eep_end == 0xFFFF`) per
 /// `vendor/ref/linux-ath/ath5k/eeprom.c:96-126`.
@@ -1090,41 +927,11 @@ unsafe fn ar2413_verify_eeprom_checksum(base: u32, ee_ver: u16) -> bool {
 /// Patch RF2413 Bank-6 2.4 GHz Output Bias (`OB`) and Driver Bias (`DB`) into
 /// `RF2413_11G_RFBANKS[23..=24]` per `vendor/ref/linux-ath/ath5k/rfbuffer.h:524-525`
 /// and `phy.c:238-265,929-940`.
-pub const fn patch_rf2413_ob_db(val23: u32, val24: u32, ob: u8, db: u8) -> (u32, u32) {
-    let ob_swap = (((ob & 1) << 2) | (ob & 2) | ((ob >> 2) & 1)) as u32;
-    let db_swap = (((db & 1) << 2) | (db & 2) | ((db >> 2) & 1)) as u32;
-    // DB_2GHZ: len=3, pos=165 (entry 23, bits 4..=6).
-    // OB_2GHZ: len=3, pos=168 (entry 23 bit 7 + entry 24 bits 0..=1).
-    let out23 = (val23 & !0x0000_00F0) | ((db_swap << 4) & 0x0000_0070) | ((ob_swap & 1) << 7);
-    let out24 = (val24 & !0x0000_0003) | ((ob_swap >> 1) & 0x0000_0003);
-    (out23, out24)
-}
+pub use ferric_ath5k::patch_rf2413_ob_db;
 
 /// Compute AR5212/AR2413 OFDM delta-slope timing mantissa & exponent for
 /// `freq_mhz` (normal 20 MHz, 40 MHz clock) per `vendor/ref/linux-ath/ath5k/phy.c:286-344`.
-pub const fn compute_ofdm_timings(freq_mhz: u16) -> Option<(u32, u32)> {
-    if freq_mhz == 0 {
-        return None;
-    }
-    // coef_scaled = ((5 * (40 << 24)) / 2) / freq_mhz = 1_677_721_600 / freq_mhz.
-    let coef_scaled: u32 = 1_677_721_600u32 / (freq_mhz as u32);
-    if coef_scaled == 0 {
-        return None;
-    }
-    let ilog = 31u32 - coef_scaled.leading_zeros();
-    if ilog == 0 || ilog > 24 {
-        return None;
-    }
-    let coef_exp = 14u32 + 24u32 - ilog;
-    if coef_exp < 16 || coef_exp >= 24 {
-        return None;
-    }
-    let shift = 24u32 - coef_exp;
-    let coef_man = coef_scaled + (1u32 << (shift - 1));
-    let ds_coef_man = coef_man >> shift;
-    let ds_coef_exp = coef_exp - 16;
-    Some((ds_coef_man, ds_coef_exp))
-}
+pub use ferric_ath5k::compute_ofdm_timings;
 
 /// Commit AR2413 2.4 GHz 11g EEPROM antenna switch tables (PCB T/R RF switch),
 /// board-specific receiver/PA/LNA/IQ calibration, and AR5212A+ PHY tweaks per
@@ -1642,13 +1449,7 @@ pub unsafe extern "C" fn gate1_wifi_scan(dma_seg: u32, dst_lin: u32) -> u32 {
 // ---------------------------------------------------------------------
 
 /// AR5212/AR2413 4-word TX control descriptor words (`desc.h:213-269`).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TxDesc4W {
-    pub ctl0: u32,
-    pub ctl1: u32,
-    pub ctl2: u32,
-    pub ctl3: u32,
-}
+pub use ferric_ath5k::TxDesc4W;
 
 /// Build the 4-word AR5212/AR2413 TX control descriptor words matching
 /// `ath5k_hw_setup_4word_tx_desc` (`vendor/ref/linux-ath/ath5k/desc.c:241-359`).
@@ -1659,70 +1460,7 @@ pub struct TxDesc4W {
 /// - `tx_power = 60` (0.5 dB steps), `tries0 = 4`, `rate0 = rate_code`
 ///   (falls back to `ATH5K_RATE_CODE_1M` if `rate_code & 0x1F == 0` to avoid
 ///   continuous-noise HW lockup per `desc.c:275`).
-pub const fn build_5212_tx_ctl(
-    frame_len: usize,
-    rate_code: u8,
-    key_idx: Option<u8>,
-    no_ack: bool,
-) -> TxDesc4W {
-    let mic_len = if key_idx.is_some() { 8usize } else { 0usize };
-    // Per ath5k/base.c:826 + desc.c:294,310: hardware CCMP expects BOTH
-    // CTL0.FRAME_LEN (+8 MIC +4 FCS) and CTL1.BUF_LEN (+8 MIC placeholder).
-    let total_frame_len = (frame_len + mic_len + 4) as u32;
-    let buf_len = (frame_len + mic_len) as u32;
-    let tx_power = 60u32; // AR5K_TUNE_MAX_TXPOWER (TPC disabled; RATE3/4 cap CCK at 16 dBm)
-    let tries0 = 10u32;
-    let safe_rate = if (rate_code & 0x1F) == 0 {
-        ATH5K_RATE_CODE_1M
-    } else {
-        rate_code
-    };
-
-    let mut ctl0 = (total_frame_len & AR5K_4W_TX_DESC_CTL0_FRAME_LEN)
-        | ((tx_power << AR5K_4W_TX_DESC_CTL0_XMIT_POWER_S) & AR5K_4W_TX_DESC_CTL0_XMIT_POWER)
-        | AR5K_4W_TX_DESC_CTL0_CLRDMASK;
-    let mut ctl1 = buf_len & AR5K_4W_TX_DESC_CTL1_BUF_LEN;
-
-    if let Some(kidx) = key_idx {
-        ctl0 |= AR5K_4W_TX_DESC_CTL0_ENCRYPT_KEY_VALID;
-        ctl1 |= ((kidx as u32) << AR5K_4W_TX_DESC_CTL1_ENCRYPT_KEY_IDX_S)
-            & AR5K_4W_TX_DESC_CTL1_ENCRYPT_KEY_IDX;
-    }
-    if no_ack {
-        ctl1 |= AR5K_4W_TX_DESC_CTL1_NOACK;
-    }
-
-    let mut ctl2;
-    let mut ctl3;
-    if safe_rate == ATH5K_RATE_CODE_36M {
-        // 4-stage hardware Multi-Rate Retry (MRR) ladder for 802.11g data frames:
-        // 36M OFDM (3 tries) -> 18M OFDM (3 tries) -> 6M OFDM (3 tries) -> 1M CCK (5 tries).
-        ctl2 = ((3u32 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0)
-            | ((3u32 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1)
-            | ((3u32 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES2_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES2)
-            | ((5u32 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES3_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES3);
-        ctl3 = ((ATH5K_RATE_CODE_36M as u32) & AR5K_4W_TX_DESC_CTL3_XMIT_RATE0)
-            | (((ATH5K_RATE_CODE_18M as u32) & 0x1F) << AR5K_4W_TX_DESC_CTL3_XMIT_RATE1_S)
-            | (((ATH5K_RATE_CODE_6M as u32) & 0x1F) << AR5K_4W_TX_DESC_CTL3_XMIT_RATE2_S)
-            | (((ATH5K_RATE_CODE_1M as u32) & 0x1F) << AR5K_4W_TX_DESC_CTL3_XMIT_RATE3_S);
-    } else {
-        ctl2 = (tries0 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES0;
-        ctl3 = (safe_rate as u32) & AR5K_4W_TX_DESC_CTL3_XMIT_RATE0;
-        // Hardware multi-rate fallback: if a higher rate (e.g. 6M OFDM) fails to
-        // get an ACK, automatically fall back to 7 retries at 1M CCK (0x1B).
-        if safe_rate != ATH5K_RATE_CODE_1M {
-            ctl2 |= (7u32 << AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1_S) & AR5K_4W_TX_DESC_CTL2_XMIT_TRIES1;
-            ctl3 |= ((ATH5K_RATE_CODE_1M as u32) & 0x1F) << AR5K_4W_TX_DESC_CTL3_XMIT_RATE1_S;
-        }
-    }
-
-    TxDesc4W {
-        ctl0,
-        ctl1,
-        ctl2,
-        ctl3,
-    }
-}
+pub use ferric_ath5k::build_5212_tx_ctl;
 
 /// Encode a 16-byte AES-CCM (WPA2 CCMP) key and optional peer MAC address into
 /// the exact 8-dword AR5212/AR2413 hardware key-cache entry layout per
@@ -1736,41 +1474,7 @@ pub const fn build_5212_tx_ctl(
 /// - `words[5]` (`TYPE`, `+0x14`): `AR5K_KEYTABLE_TYPE_CCM` (`6`, AES-CCM)
 /// - `words[6]` (`MAC0`, `+0x18`): `(mac_le32 >> 1) | ((mac_le16 & 1) << 31)` (or `0`)
 /// - `words[7]` (`MAC1`, `+0x1C`): `(mac_le16 >> 1) | unicast_valid`
-pub const fn encode_ccmp_key_words(key: &[u8; 16], mac: Option<&[u8; 6]>) -> [u32; 8] {
-    let key0 = u32::from_le_bytes([key[0], key[1], key[2], key[3]]);
-    let key1 = u16::from_le_bytes([key[4], key[5]]) as u32;
-    let key2 = u32::from_le_bytes([key[6], key[7], key[8], key[9]]);
-    let key3 = u16::from_le_bytes([key[10], key[11]]) as u32;
-    let key4 = u32::from_le_bytes([key[12], key[13], key[14], key[15]]);
-    let key_type = AR5K_KEYTABLE_TYPE_CCM;
-
-    let (mac_lo, mac_hi, valid_flag) = match mac {
-        Some(m) => {
-            let unicast_flag = if (m[0] & 0x01) != 0 {
-                0
-            } else {
-                AR5K_KEYTABLE_VALID
-            };
-            let raw_lo = u32::from_le_bytes([m[0], m[1], m[2], m[3]]);
-            let raw_hi = u16::from_le_bytes([m[4], m[5]]) as u32;
-            let lo = (raw_lo >> 1) | ((raw_hi & 1) << 31);
-            let hi = raw_hi >> 1;
-            (lo, hi, unicast_flag)
-        }
-        None => (0, 0, AR5K_KEYTABLE_VALID),
-    };
-
-    [
-        key0,
-        key1,
-        key2,
-        key3,
-        key4,
-        key_type,
-        mac_lo,
-        mac_hi | valid_flag,
-    ]
-}
+pub use ferric_ath5k::encode_ccmp_key_words;
 
 /// Initialize AR2413 QCU 0 + DCU 0 for data and management TX per
 /// `vendor/ref/linux-ath/ath5k/qcu.c` and `dma.c`.
