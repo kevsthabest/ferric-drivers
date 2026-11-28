@@ -13,3 +13,6 @@ wifi-core = { path = "../wifi-core" }
 ferric-ehci = { path = "../ferric-ehci" }
 ferric-hw = { path = "../ferric-hw" }
 ferric-i8255x = { path = "../ferric-i8255x" }
+
+[features]
+ethernet-only = []
