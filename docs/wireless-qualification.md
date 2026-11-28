@@ -69,3 +69,16 @@ The experimental start entry now permits only slot 0 and requires both PCI audit
 
 ## Gate C command interface (still gated)
 CBSTART.COM invokes FD09 AX=0Bh BX=0 (only slot zero). Status 0 means ready, 1 invalid, 2 busy, 5 preflight or clean transaction failure, 6 incomplete independent authorization, 7 retained cleanup, 8 ABI error, 9 provider missing. CBSTOP.COM invokes AX=0Dh; 0 is stopped/already stopped, 2 is consumer pinned, 7 is retained cleanup. Stop ATH5K first, then CBSTOP; never force unload after status 7. No override exists and current evidence remains incomplete. QEMU absent-hardware tests exercise both commands. The DOS query destination is restricted to conventional RAM and cannot overlap the IVT/BDA.
+
+## Gate B: conservative conventional BAR bounds
+For a standards-compliant naturally aligned power-of-two PCI memory BAR, its maximum possible size is the lowest set bit of the nonzero base (not its measured size). Source: PCI binding to Open Firmware, PCI 2.1, https://www.devicetree.org/open-firmware/bindings/pci/pci2_1.pdf. With the captured exact base assignments:
+| BAR | Conservative maximum |
+|---|---|
+| Audio F7EFF000 | 4 KiB |
+| Ethernet F7EFE000 | 8 KiB |
+| Ethernet flash F7EC0000 | 256 KiB |
+| OHCI F7EBF000 / F7EBE000 | 4 KiB / 8 KiB |
+| EHCI F7EBDF00 | 256 B |
+| SD F7EBDC00 | 1 KiB |
+
+None of these upper-bound intervals intersects the proposed slot 0 window or socket. The implementation checks the intervals separately from firmware authorization, rejects zero or unsupported BAR types, and tests an intentional overlap. This removes the need to write sizing patterns to these assigned conventional BARs for the narrow non-overlap question, assuming compliant devices. It does not cover hard-decoded ranges, unassigned BARs, proprietary chipset resources, or root forwarding. Root _CRS and motherboard reservations remain the real blocker; see https://docs.kernel.org/5.19/PCI/acpi-info.html. The previous BIOS reference identifies a 20,765-byte DSDT in ACPIHI.BIN at offset 0x110, but the raw binary was unavailable during this review; do not infer its evaluated _CRS from strings. Reuse that exact capture for offline AML disassembly, without repeating PCI captures. No activation or DMA gate changes.
