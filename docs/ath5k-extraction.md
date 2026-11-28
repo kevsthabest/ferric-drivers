@@ -65,3 +65,7 @@ Resident session now processes authenticated group-key rotations using the exist
 ## DOS packet API
 
 Standalone packet API core implements the Crynwr register interface, four exclusive receiver registrations, bounded conventional buffers disjoint from DMA, transmit, MAC, receive modes 1–3 and counters. Two-phase callback state pins active registration against release/unload. The Jemm interrupt hook and real-mode stub installation remain separate and disabled. No hardware activation path was opened.
+
+## Real-mode packet bridge
+
+Experimental AX=20h returns stub length/paragraphs, 21h copies the stub, 22h installs against a connected resident session and 23h removes it. INT 60h and private INT F1h are exclusively claimed via FRES; INT 1Ch polls receive and performs two-stage callbacks with a bounded budget. Removal refuses active receivers, restores the incumbent vector only if still owned, tombstones the stub and retries failed unhooks/releases. The caller must retain its DOS allocation until removal succeeds. No DOS installer or connection activation is enabled yet. Combined CI pending.

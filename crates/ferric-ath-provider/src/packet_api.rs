@@ -96,3 +96,9 @@ mod tests{
     #[test]fn buffer_limits(){assert_eq!(linear(0,0,6),None);assert_eq!(linear(0xa000,0,6),None);assert_eq!(linear(0x1000,0xffff,2),None);assert_eq!(linear(0x1000,0,6),Some(0x10000));}
     #[test]fn handle_bounds(){let mut p=Packet::new();assert!(!active(&p,0));assert!(!active(&p,5));p.regs[0].active=true;assert!(active(&p,1));}
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ath_stub_validate(seg:u32)->u32{
+    if seg>0xffff{return 0;}
+    u32::from(linear(seg,0,512).is_some())
+}

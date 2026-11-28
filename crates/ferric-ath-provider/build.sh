@@ -7,6 +7,7 @@ cd "${ROOT_DIR}"
 
 OUT_DIR="${ROOT_DIR}/out"
 mkdir -p "${OUT_DIR}"
+nasm -f bin -o out/athstub.bin crates/ferric-ath-provider/asm/athstub.asm
 
 
 
@@ -21,13 +22,13 @@ JLM_DLL="${OUT_DIR}/ATH5K.DLL"
 JLM_PX="${OUT_DIR}/ATH5K.JLM"
 
 echo "[ferric-ath-provider] 2/5 Partial-linking Rust object and verifying 386 purity..."
-ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u ath_version -u ath_probe -u ath_shutdown -u ath_query -u ath_dma_start -u ath_scan -u ath_connect_internal -u ath_send_internal -u ath_receive_internal -u ath_packet_api -u ath_upcall_next -u ath_upcall_after -u ath_packet_busy -u ath_packet_ready "${LIB_A}" -o "${JLM_RUST_OBJ}"
+ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u ath_version -u ath_probe -u ath_shutdown -u ath_query -u ath_dma_start -u ath_scan -u ath_connect_internal -u ath_send_internal -u ath_receive_internal -u ath_packet_api -u ath_upcall_next -u ath_upcall_after -u ath_packet_busy -u ath_packet_ready -u ath_stub_validate "${LIB_A}" -o "${JLM_RUST_OBJ}"
 python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 
 echo "[ferric-ath-provider] 3/5 Converting ELF32->COFF and assembling ath_jlm.asm..."
 python3 crates/gate1-svc/elf32_to_coff.py "${JLM_RUST_OBJ}" "${JLM_RUST_COFF}"
 nasm -f win32 -o "${JLM_STUB_OBJ}" crates/ferric-ath-provider/asm/ath_jlm.asm
-python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm
+python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm crates/ferric-ath-provider/asm/athstub.asm
 
 echo "[ferric-ath-provider] 4/5 Linking relocatable PE32 JLM out/ATH5K.DLL and PX-patching..."
 wlink format windows nt dll runtime native     file "${JLM_STUB_OBJ},${JLM_RUST_COFF}"     name "${JLM_DLL}"     option start=DllMain,quiet     export _ddb.1
