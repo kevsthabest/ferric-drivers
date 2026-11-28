@@ -7,6 +7,7 @@ use ferric_cardbus::CardBusSlotInfo;
 use ferric_ath5k::dma_lease::Lease;
 use ferric_ath5k::probe::{WifiProbeInfo,read_revision,probe_mapped};
 mod registers;
+mod dma_platform;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo)->!{loop{}}
@@ -68,6 +69,16 @@ pub extern "C" fn ath_probe(slot:u32)->u32{
     if unsafe{ath_cb_master(slot,0)}!=0{return 7;}
     if p.stage==4{0}else{8}
 }
+/// Experimental DMA start. Fails closed before locking any DOS memory
+/// until the PCI drain gate is qualified.
+#[unsafe(no_mangle)]
+pub extern "C" fn ath_dma_start(seg:u32)->u32{
+    let s=state();
+    let Some(slot)=s.slot else{return 5;};
+    if s.info.stage!=4||s.info.mac_ok==0||seg==0||seg>0xffff{return 1;}
+    let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
+    match s.dma.start(&mut io,seg<<4){Ok(_)=>0,Err(_)=>if s.dma.can_unload(){9}else{7}}
+}
 /// Ring-0 caller provides a writable 44-byte ABI buffer. DOS wrapper bounds it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
@@ -80,8 +91,11 @@ pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
 #[unsafe(no_mangle)]
 pub extern "C" fn ath_shutdown()->u32{
     let s=state();
-    if !s.dma.can_unload(){return 7;}
     let Some(slot)=s.slot else{return 0;};
+    if !s.dma.can_unload(){
+        let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
+        if s.dma.shutdown(&mut io).is_err(){return 7;}
+    }
     if unsafe{ath_cb_master(slot,0)}!=0{return 7;}
     if s.linear!=0{
         if unsafe{ath_unmap(s.linear)}==0{return 7;}

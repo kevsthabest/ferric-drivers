@@ -21,7 +21,7 @@ JLM_DLL="${OUT_DIR}/ATH5K.DLL"
 JLM_PX="${OUT_DIR}/ATH5K.JLM"
 
 echo "[ferric-ath-provider] 2/5 Partial-linking Rust object and verifying 386 purity..."
-ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u ath_version -u ath_probe -u ath_shutdown -u ath_query "${LIB_A}" -o "${JLM_RUST_OBJ}"
+ld -m elf_i386 -r --gc-sections -T crates/gate1-svc/jlm_merge.ld     -u ath_version -u ath_probe -u ath_shutdown -u ath_query -u ath_dma_start "${LIB_A}" -o "${JLM_RUST_OBJ}"
 python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 
 echo "[ferric-ath-provider] 3/5 Converting ELF32->COFF and assembling ath_jlm.asm..."

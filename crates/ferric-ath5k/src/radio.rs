@@ -299,7 +299,7 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
 
         // 2.4 GHz 802.11g PLL + PHY mode (ath5k/reset.c:747-826).
         io.write(AR5K_PHY_PLL, AR5K_PHY_PLL_RF5112_44MHZ);
-        let _ = io.delay_ms(1);
+        if !io.delay_ms(1){*last_fail=9;return false;}
         io.write(AR5K_PHY_MODE, AR5K_PHY_MODE_11G_2GHZ);
         io.write(AR5K_PHY_TURBO, 0);
 
@@ -320,7 +320,7 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
             );
         }
         write_reg_table(io, RF2413_2GHZ_RFGAIN);
-        let _ = io.delay_ms(1);
+        if !io.delay_ms(1){*last_fail=9;return false;}
         // Patch EEPROM 2.4 GHz OB/DB bias into Bank 6 entries 23..=24 before upload (phy.c:935-940).
         let (p23, p24) = patch_rf2413_ob_db(
             RF2413_11G_RFBANKS[23].1,
@@ -346,7 +346,7 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
         io.write(AR5K_RF_BUFFER, rf_lo);
         io.write(AR5K_RF_BUFFER_CONTROL_5, rf_hi);
         io.write(AR5K_PHY_ACT, AR5K_PHY_ACT_ENABLE);
-        let _ = io.delay_ms(5);
+        if !io.delay_ms(5){*last_fail=9;return false;}
 
         // ADC ready check (ath5k/phy.c:3896-3903).
         let tst1 = io.read(AR5K_PHY_TST1);
@@ -357,7 +357,7 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
                 adc_ok = true;
                 break;
             }
-            let _ = io.delay_ms(1);
+            if !io.delay_ms(1){io.write(AR5K_PHY_TST1,tst1);*last_fail=9;return false;}
         }
         io.write(AR5K_PHY_TST1, tst1);
         if !adc_ok {
@@ -376,7 +376,7 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
                 agc_ok = true;
                 break;
             }
-            let _ = io.delay_ms(1);
+            if !io.delay_ms(1){*last_fail=9;return false;}
         }
         if !agc_ok {
             *last_fail = 6;
@@ -400,23 +400,24 @@ pub fn ar2413_radio_init_11g(io: &mut impl RegisterIo, freq_mhz: u16, last_fail:
 }
 
 
-pub fn ar2413_set_channel_2g(io: &mut impl RegisterIo, freq_mhz: u16) {
+pub fn ar2413_set_channel_2g(io: &mut impl RegisterIo, freq_mhz: u16) -> bool {
     let Some((rf_lo, rf_hi)) = rf5112_channel_regs(freq_mhz) else {
-        return;
+        return false;
     };
     {
         io.write(AR5K_RF_BUFFER, rf_lo);
         io.write(AR5K_RF_BUFFER_CONTROL_5, rf_hi);
-        let _ = io.delay_ms(3);
+        if !io.delay_ms(3){return false;}
         let agc = io.read(AR5K_PHY_AGCCTL);
         io.write(AR5K_PHY_AGCCTL,
             agc | AR5K_PHY_AGCCTL_CAL | AR5K_PHY_AGCCTL_NF,
         );
         for _ in 0..15 {
             if (io.read(AR5K_PHY_AGCCTL) & AR5K_PHY_AGCCTL_CAL) == 0 {
-                break;
+                return true;
             }
-            let _ = io.delay_ms(1);
+            if !io.delay_ms(1){return false;}
         }
     }
+    false
 }

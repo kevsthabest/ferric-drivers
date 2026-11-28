@@ -57,3 +57,18 @@ mod tests{
     #[test]fn stuck_queue_keeps_descriptor(){let mut m=fixture();m.stuck=true;assert_eq!(stop_tx(&mut m),Err(StopError::Timeout));assert_eq!(m.ptr,0x12340);assert_eq!(m.disabled,1);}
     #[test]fn absent_and_timer(){let mut m=fixture();m.tx=u32::MAX;assert_eq!(stop_tx(&mut m),Err(StopError::Absent));m.tx=1;m.stuck=true;m.timer=false;assert_eq!(stop_all(&mut m),Err(StopError::Timer));}
 }
+
+/// Disable interrupt generation and verify the global mask.
+pub fn mask_irqs(io:&mut impl RegisterIo)->bool{
+    if io.read(0x24)==u32::MAX{return false;}
+    io.write(0x24,0);io.write(0xa0,0);
+    io.read(0x24)==0 && io.read(0xa0)==0
+}
+/// Start RX only with a prepared ring and an active DMA lease.
+pub fn start_rx(io:&mut impl RegisterIo,physical:u32)->bool{
+    if physical==0||physical&15!=0||io.read(AR5K_CR)==u32::MAX{return false;}
+    io.write(0x0c,physical);
+    if io.read(0x0c)!=physical{return false;}
+    io.write(AR5K_CR,AR5K_CR_RXE);
+    let v=io.read(AR5K_CR);v!=u32::MAX&&v&AR5K_CR_RXE!=0
+}

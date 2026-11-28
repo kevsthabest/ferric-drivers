@@ -29,3 +29,7 @@ Experimental ATH5K.JLM (FD0A) is now in the aggregate build. It checks FRES and 
 ## Shared MAC probe
 
 CI fca637b passed. Both integrated and resident backends now use the shared 44-byte WifiProbeInfo and MAC/EEPROM probe sequence. The standalone provider reports AX=0A status 0 for completed probe or 8 for partial probe, and AX=0E ES:DI copies the diagnostic record (privileged linear address hidden). AX=0D releases mapping/consumer. Late PCI configuration recovery remains integrated-only; standalone reports partial probe rather than performing unqualified bridge rewrites. DMA remains disabled. Physical activation still gated.
+
+## Resident DMA adapter
+
+CI 44ac8d5 passed. The VDMAD adapter and shared radio/engine functions are wired into the resident lease; unlock checks carry and uses PCI flags 0 consistently with lock. Radio tuning reports calibration and delay failure. DMA start is deliberately not exported through DOS and fails before lock while DRAIN_QUALIFIED is false. No physical drain or DOS allocation lifetime proof is claimed.

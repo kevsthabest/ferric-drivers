@@ -628,7 +628,7 @@ unsafe fn ar2413_radio_init_11g(base: u32, freq_mhz: u16) -> bool {
 }
 
 unsafe fn ar2413_set_channel_2g(base: u32, freq_mhz: u16) {
-    ferric_ath5k::radio::ar2413_set_channel_2g(&mut LegacyRegisters(base),freq_mhz)
+    let _=ferric_ath5k::radio::ar2413_set_channel_2g(&mut LegacyRegisters(base),freq_mhz);
 }
 
 /// FFI entry for JLM V86 API `AX=0x000B`: passive 2.4 GHz beacon scan across
