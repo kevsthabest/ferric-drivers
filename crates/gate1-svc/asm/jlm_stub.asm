@@ -2124,6 +2124,11 @@ DllMain:
     VMMCall VMM_GET_DDB
     test ecx, ecx
     jnz .attach_conflict
+    xor edi, edi
+    mov eax, 0xFD09
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
     pop edi
     call gate1_svc_reset
     ; This PE is only ever loaded by JLOAD, so Jemm's VDMAD services are

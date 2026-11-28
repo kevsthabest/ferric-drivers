@@ -6,16 +6,16 @@ pub trait ConfigIo {
     fn read(&mut self, offset: u8) -> u32;
     fn write(&mut self, offset: u8, value: u32);
 }
-const OFFSETS: [u8; 10] = [4, 0x10, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x3c];
+const OFFSETS: [u8; 15] = [4, 0x10, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x3c, 0x34, 0x38, 0x44, 0x90, 0xa0];
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error { Absent, Active, Invalid, Readback }
-pub struct Snapshot { values: [u32; 10] }
+pub struct Snapshot { values: [u32; 15] }
 impl Snapshot {
     pub fn capture(io: &mut impl ConfigIo) -> Result<Self, Error> {
         if io.read(0) != (u32::from(TOPIC95_DID) << 16 | u32::from(TOPIC95_VID)) {
             return Err(Error::Absent);
         }
-        let mut values = [0; 10];
+        let mut values = [0; 15];
         for (i, off) in OFFSETS.iter().enumerate() {
             values[i] = io.read(*off);
             if values[i] == u32::MAX { return Err(Error::Absent); }
@@ -39,6 +39,12 @@ impl Snapshot {
         io.write(0x28, 0);
         io.write(0x2c, 0xfffc);
         io.write(0x30, 0);
+        io.write(0x34, 0xfffc);
+        io.write(0x38, 0);
+        io.write(0x44, 0);
+        io.write(0x90, self.values[13] | 1);
+        let pin = if self.values[14] & 0x2000 != 0 { 0x2000 } else { 0x1000 };
+        io.write(0xa0, (self.values[14] & !0x3000) | pin | 0x800001c0);
         if io.read(0x10) & !0xfff != r.bar0_phys ||
             io.read(0x18) & 0x00ff_ffff != u32::from(r.sec_bus) * 0x10100 ||
             io.read(0x1c) & !0xfff != r.mem0_base ||

@@ -86,6 +86,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: experimental CARDBUS.JLM FD09 resident discovery adapter and versioned service table added. Activation deliberately refused until firmware resource audit and hardware lifecycle wiring are complete. CI pending.
 
+- CI `d0d44ea`: discovery-only CARDBUS build, host tests and Ethernet QEMU passed. Added shared transaction coordinator for claims/config/map/power/rollback and reverse integrated-core FD09 conflict guard. Hardware activation still disabled.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

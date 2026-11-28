@@ -33,3 +33,7 @@ FRES now recognizes physical MMIO interval and secondary-bus claims (kinds 6 and
 ## Resident discovery adapter
 
 CARDBUS.JLM (FD09) requires FRES. Its service table 0=version, 1=query(slot, destination), 2=acquire(slot, consumer), 3=release(slot, consumer). Query returns the 40-byte slot record; stage 1 means PCI identity/header verified, not powered. Acquire currently returns 5 (not enabled), release 4 (not owned). No PCI configuration writes, MMIO mapping or power transitions occur in this build. Existing CBINIT/CBPROBE clients remain integrated-core clients until updated. No Atheros consumer should treat this as an operational provider.
+
+## Transaction coordinator
+
+The pure provider Session composes the resource lease, configuration snapshot, socket mapping contract and power state machine. It pins resources when cleanup cannot be verified and refuses shutdown with a consumer attached. The configuration snapshot now includes both I/O windows and ToPIC vendor configuration. The resident module remains discovery-only pending the actual platform resource audit, mapping and physical tests.
