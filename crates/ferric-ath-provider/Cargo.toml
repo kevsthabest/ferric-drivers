@@ -1,0 +1,10 @@
+[package]
+name = "ferric-ath-provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[lib]
+crate-type = ["staticlib"]
+[dependencies]
+ferric-ath5k = { path = "../ferric-ath5k" }
+ferric-cardbus = { path = "../ferric-cardbus" }

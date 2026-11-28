@@ -9,7 +9,7 @@
 //!
 //! Strictly 386-pure (`no_std`, no SSE2 `pause`), read-only with respect to storage.
 
-use crate::{cardbus, inb, inl, outb, outl, pci_read32, pci_write32};
+use crate::{cardbus, inb, inl, outb, outl, pci_read32, pci_write8};
 
 const ALI_VID: u16 = 0x10B9;
 const M7101_DID: u16 = 0x7101;
@@ -269,14 +269,7 @@ unsafe fn pci_read16(bus: u8, dev: u8, func: u8, off: u8) -> u16 {
     ((dw >> ((off & 2) * 8)) & 0xFFFF) as u16
 }
 
-unsafe fn pci_write8(bus: u8, dev: u8, func: u8, off: u8, val: u8) {
-    let aligned = off & !3;
-    let shift = (off & 3) * 8;
-    let mut dw = unsafe { pci_read32(bus, dev, func, aligned) };
-    dw &= !(0xFFu32 << shift);
-    dw |= (val as u32) << shift;
-    unsafe { pci_write32(bus, dev, func, aligned, dw) };
-}
+
 
 unsafe fn locate_m7101() -> Option<M7101Locate> {
     for dev in 0..32u8 {

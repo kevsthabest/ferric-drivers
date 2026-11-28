@@ -2,7 +2,10 @@
 
 Standalone Jemm Loadable Module (`PMU.JLM`, DDB `0xFD05`) for the **ALi M7101** Power Management Unit (`10B9:7101`), supporting both the ALi M1535D+ (`i2c-ali1535` layout, e.g. Toshiba DynaBook SS 2000M) and M1533/M1543 layouts.
 
-No dependency on `FERRIC.JLM` — load it on its own under JemmEx/Jemm386:
+No dependency on `FERRIC.JLM` — load it on its own under JemmEx/Jemm386.
+Do not load both modules together. DynaBook evidence confirms integrated
+CPU throttling; smart-battery SMBus did not ACK and LCD PWM behavior is
+not yet qualified. The standalone variant requires separate silicon tests:
 
 ```bat
 JLOAD.EXE PMU.JLM

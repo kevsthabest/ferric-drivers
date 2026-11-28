@@ -123,7 +123,7 @@ probe_fn:
         mov eax, [tmp_dword]
         call print_hex32
 
-        mov al, 0x14
+        mov al, 0x18
         call pci_read32
         mov [tmp_dword], eax
         mov si, msg_bus
@@ -304,12 +304,22 @@ pci_read32:
         push ecx
         movzx ecx, al
         and ecx, 0xFC
+        pushfd
+        cli
+        mov dx, 0xCF8
+        in eax, dx
+        push eax
         mov eax, [cfg_base]
         or eax, ecx
-        mov dx, 0xCF8
         out dx, eax
         mov dx, 0xCFC
         in eax, dx
+        mov ecx,eax
+        pop eax
+        mov dx,0xCF8
+        out dx,eax
+        mov eax,ecx
+        popfd
         pop ecx
         ret
 

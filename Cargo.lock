@@ -7,8 +7,43 @@ name = "abi"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-ath-provider"
+version = "0.1.0"
+dependencies = [
+ "ferric-ath5k",
+ "ferric-cardbus",
+]
+
+[[package]]
+name = "ferric-ath5k"
+version = "0.1.0"
+dependencies = [
+ "wifi-core",
+]
+
+[[package]]
+name = "ferric-cardbus"
+version = "0.1.0"
+
+[[package]]
+name = "ferric-cb-provider"
+version = "0.1.0"
+dependencies = [
+ "ferric-cardbus",
+ "ferric-hw",
+]
+
+[[package]]
 name = "ferric-ehci"
 version = "0.1.0"
+
+[[package]]
+name = "ferric-ethernet"
+version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+ "ferric-i8255x",
+]
 
 [[package]]
 name = "ferric-exfat"
@@ -16,6 +51,14 @@ version = "0.1.0"
 dependencies = [
  "abi",
 ]
+
+[[package]]
+name = "ferric-hw"
+version = "0.1.0"
+
+[[package]]
+name = "ferric-i8255x"
+version = "0.1.0"
 
 [[package]]
 name = "ferric-ntfs"
@@ -27,10 +70,23 @@ dependencies = [
 [[package]]
 name = "ferric-pmu"
 version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
+
+[[package]]
+name = "ferric-res"
+version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
 
 [[package]]
 name = "ferric-sd"
 version = "0.1.0"
+dependencies = [
+ "ferric-hw",
+]
 
 [[package]]
 name = "ferric-vbe"
@@ -43,8 +99,12 @@ dependencies = [
 name = "gate1-svc"
 version = "0.1.0"
 dependencies = [
+ "ferric-ath5k",
+ "ferric-cardbus",
  "abi",
  "ferric-ehci",
+ "ferric-hw",
+ "ferric-i8255x",
  "wifi-core",
 ]
 

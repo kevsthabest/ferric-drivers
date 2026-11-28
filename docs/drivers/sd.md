@@ -2,13 +2,23 @@
 
 Standalone read-only Jemm Loadable Module (`TOSHSD.JLM`, DDB `0xFD06`) for the **Toshiba TC6371AF / Type-A PCI SD Host Controller** (`1179:0805` / `1179:0803`, polled PIO mode, zero IRQ 11 contention).
 
-No dependency on `FERRIC.JLM` — load it on its own under JemmEx/Jemm386:
+No dependency on `FERRIC.JLM`; Stage I requires `FRES.JLM` v1.0 under JemmEx/Jemm386.
+Do not load TOSHSD and the integrated core together. TOSHSD registers on attach,
+claims its PCI BDF before writes, releases after shutdown, and unregisters on detach.
+The broker cannot unload while the driver remains registered. Stage I standalone builds require an
+already assigned, valid 32-bit PCI memory BAR; unassigned BARs fail closed
+rather than guessing an address. The integrated compatibility driver retains
+its existing allocator. An inserted-card read on real silicon is still
+required for qualification:
 
 ```bat
+JLOAD.EXE FRES.JLM
 JLOAD.EXE TOSHSD.JLM
 SDPROBE
 SDPROBE /R 0
 SDPROBE /U
+JLOAD.EXE -u TOSHSD.JLM
+JLOAD.EXE -u FRES.JLM
 ```
 
 ## Capabilities & Verbs

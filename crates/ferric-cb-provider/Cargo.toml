@@ -1,0 +1,10 @@
+[package]
+name = "ferric-cb-provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[lib]
+crate-type = ["staticlib"]
+[dependencies]
+ferric-cardbus = { path = "../ferric-cardbus" }
+ferric-hw = { path = "../ferric-hw" }

@@ -10,7 +10,7 @@
 
 use core::cell::UnsafeCell;
 
-use crate::{cardbus, ehci, pci_read32, pci_write32};
+use crate::{cardbus, pci_read32, pci_write8, pci_write32};
 
 const TOSHIBA_VID: u16 = 0x1179;
 const TOSHSD_DID_A: u16 = 0x0805; // DynaBook SS 2000M built-in SD slot (00:12.0)
@@ -97,6 +97,7 @@ const OPT_WIDTH_1: u16 = 1 << 15;
 
 struct ToshSdState {
     present: bool,
+    claimed: bool,
     bus: u8,
     dev: u8,
     func: u8,
@@ -106,6 +107,8 @@ struct ToshSdState {
     bar_assigned: bool,
     mapped_phys: u32,
     mapped_lin: u32,
+    original_cmd: u32,
+    original_pmcsr: u32,
     card_ready: bool,
     is_sdhc: bool,
     write_protected: bool,
@@ -115,9 +118,14 @@ struct ToshSdState {
 }
 
 impl ToshSdState {
+    fn bdf(&self) -> u32 {
+        (u32::from(self.bus) << 8) | (u32::from(self.dev) << 3) | u32::from(self.func)
+    }
+
     const fn new() -> Self {
         Self {
             present: false,
+            claimed: false,
             bus: 0,
             dev: 0,
             func: 0,
@@ -127,6 +135,8 @@ impl ToshSdState {
             bar_assigned: false,
             mapped_phys: 0,
             mapped_lin: 0,
+            original_cmd: 0,
+            original_pmcsr: 0,
             card_ready: false,
             is_sdhc: false,
             write_protected: true,
@@ -248,14 +258,7 @@ unsafe fn mmio_w32(base: u32, off: usize, val: u32) {
     unsafe { core::ptr::write_volatile((base as usize + off) as *mut u32, val) };
 }
 
-unsafe fn pci_write8(bus: u8, dev: u8, func: u8, off: u8, val: u8) {
-    let aligned = off & !3;
-    let shift = (off & 3) * 8;
-    let mut dw = unsafe { pci_read32(bus, dev, func, aligned) };
-    dw &= !(0xFFu32 << shift);
-    dw |= (val as u32) << shift;
-    unsafe { pci_write32(bus, dev, func, aligned, dw) };
-}
+
 
 unsafe fn find_toshsd_pci() -> Option<(u8, u8, u8, u16, u8, u32)> {
     for dev in 0..32u8 {
@@ -271,7 +274,7 @@ unsafe fn find_toshsd_pci() -> Option<(u8, u8, u8, u16, u8, u32)> {
             let did = (id >> 16) as u16;
             if vid == TOSHIBA_VID && (did == TOSHSD_DID_A || did == TOSHSD_DID_B) {
                 let rev = (unsafe { pci_read32(0, dev, func, 0x08) } & 0xFF) as u8;
-                let bar0 = unsafe { pci_read32(0, dev, func, 0x10) } & 0xFFFF_F000;
+                let bar0 = unsafe { pci_read32(0, dev, func, 0x10) };
                 return Some((0, dev, func, did, rev, bar0));
             }
         }
@@ -363,10 +366,18 @@ unsafe fn sd_send_cmd(base: u32, opcode: u16, arg: u32, flags: u16) -> Result<[u
     Ok(resp)
 }
 
+/// Convert a bounded logical sector into the card's command argument.
+fn sector_argument(is_sdhc: bool, sectors: u32, lba: u32) -> Option<u32> {
+    if lba >= sectors {
+        return None;
+    }
+    if is_sdhc { Some(lba) } else { lba.checked_mul(512) }
+}
+
 /// Read one 512-byte sector at `lba` using `CMD17` (strictly read-only PIO).
 unsafe fn sd_read_one_sector(st: &ToshSdState, lba: u32, dst: &mut [u8; 512]) -> Result<(), u32> {
     let base = st.mapped_lin;
-    let arg = if st.is_sdhc { lba } else { lba.wrapping_mul(512) };
+    let arg = sector_argument(st.is_sdhc, st.sectors, lba).ok_or(4u32)?;
 
     unsafe {
         mmio_w16(base, REG_SDIO_LEDCTRL, 1);
@@ -519,38 +530,44 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     let st = sd_state();
 
     if !st.present {
+        // A failed release must not be overwritten by another probe.
+        if st.claimed {
+            if unsafe { crate::sd_release_bdf(st.bdf()) } != 0 {
+                o.str("SD: previous PCI claim could not be released");
+                o.crlf();
+                return o.pos as u32;
+            }
+            st.claimed = false;
+        }
         let Some((bus, dev, func, did, rev, bar0)) = (unsafe { find_toshsd_pci() }) else {
             o.str("SD: Toshiba SD controller (1179:0805) not found on PCI bus 0");
             o.crlf();
             return o.pos as u32;
         };
-        st.present = true;
         st.bus = bus;
         st.dev = dev;
         st.func = func;
         st.did = did;
         st.rev = rev;
 
-        let mut bar = bar0;
-        if bar == 0 {
-            match unsafe { ehci::assign_mmio_bar(bus, dev, func, 0x1000) } {
-                Some(base) => {
-                    bar = base;
-                    st.bar_assigned = true;
-                }
-                None => {
-                    o.str("SD: failed to assign 4 KiB MMIO BAR0");
-                    o.crlf();
-                    return o.pos as u32;
-                }
-            }
-        }
+        // Standalone mode must not guess unallocated PCI resources.
+        let Some(bar) = ferric_hw::memory_bar32(bar0) else {
+            o.str("SD: no valid firmware-assigned 32-bit MMIO BAR0");
+            o.crlf();
+            return o.pos as u32;
+        };
         st.bar_phys = bar;
+        if unsafe { crate::sd_claim_bdf(st.bdf()) } != 0 {
+            o.str("SD: PCI device ownership denied by FRES");
+            o.crlf();
+            return o.pos as u32;
+        }
+        st.claimed = true;
 
         // Wake PCI PMCSR (0x84) to D0 if in D3
         let pmcsr = unsafe { pci_read32(bus, dev, func, 0x84) };
         if (pmcsr & 0x0003) != 0 {
-            unsafe { pci_write32(bus, dev, func, 0x84, pmcsr & !0x0003) };
+            unsafe { pci_write32(bus, dev, func, 0x84, pmcsr & !0x8003) };
             cardbus::delay_ms(10);
         }
 
@@ -558,15 +575,34 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         let cmd = unsafe { pci_read32(bus, dev, func, 0x04) };
         unsafe { pci_write32(bus, dev, func, 0x04, (cmd & 0xFFFF) | 0x0002) };
 
-        let lin = unsafe { cardbus::map_mmio(bar, 1) };
-        if lin == 0 {
+        // Highest accessed register is the 16-bit LED control at 0x13E.
+        let window = ferric_hw::MmioWindow::new(bar, 0x140);
+        let lin = window.and_then(|w| {
+            let mapped_page = unsafe { cardbus::map_mmio(w.page_base, w.page_count) };
+            w.linear_base(mapped_page)
+        });
+        let Some(lin) = lin else {
             o.str("SD: map_mmio failed for BAR0=0x");
             o.hex32(bar);
             o.crlf();
+            // Restore the original PCI command and power state on failed mapping.
+            unsafe {
+                pci_write32(bus, dev, func, 0x04, cmd & 0xFFFF);
+                if (pmcsr & 3) != 0 {
+                    // PME status is W1C; do not echo it as a one.
+                    pci_write32(bus, dev, func, 0x84, pmcsr & !0x8000);
+                }
+            }
+            if unsafe { crate::sd_release_bdf(st.bdf()) } == 0 {
+                st.claimed = false;
+            }
             return o.pos as u32;
-        }
+        };
         st.mapped_phys = bar;
         st.mapped_lin = lin;
+        st.original_cmd = cmd & 0xFFFF;
+        st.original_pmcsr = pmcsr;
+        st.present = true;
     }
 
     o.str("SD: Toshiba 1179:");
@@ -585,9 +621,14 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     o.crlf();
 
     st.card_ready = false;
-    unsafe { hw_reset_controller(st) };
-
     let base = st.mapped_lin;
+    // Check the mapping before writing any controller register.
+    if unsafe { mmio_r32(base, REG_CARDSTATUS) } == u32::MAX {
+        o.str("SD: MMIO not responding before reset");
+        o.crlf();
+        return o.pos as u32;
+    }
+    unsafe { hw_reset_controller(st) };
     let status = unsafe { mmio_r32(base, REG_CARDSTATUS) };
     if status == 0xFFFF_FFFF {
         o.str("SD: MMIO returned 0xFFFFFFFF (controller not responding)");
@@ -714,7 +755,12 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
 
     // CMD16: SET_BLOCKLEN = 512 (required for SDSC)
     if !st.is_sdhc {
-        let _ = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) };
+        if let Err(e) = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) } {
+            o.str("SD: CMD16 failed sts=0x");
+            o.hex32(e);
+            o.crlf();
+            return o.pos as u32;
+        }
     }
 
     // Switch clock to 16.5 MHz (div=2)
@@ -722,7 +768,7 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         mmio_w16(base, REG_CARDCLOCKCTRL, CLK_ENABLE | CLK_DIV_2);
         cardbus::delay_ms(5);
     }
-    st.card_ready = true;
+    // Do not publish readiness until the first sector read succeeds.
 
     // Report card summary
     o.str("SD Card: ");
@@ -748,6 +794,7 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     let mut sec0 = [0u8; 512];
     match unsafe { sd_read_one_sector(st, 0, &mut sec0) } {
         Ok(()) => {
+            st.card_ready = true;
             o.str("  Sector 0: OK  fs=");
             o.str(detect_sector0_label(&sec0));
             o.str("  sig=");
@@ -776,6 +823,11 @@ pub extern "C" fn gate1_sd_read_sec(lba: u32, out_ptr: u32) -> u32 {
     if !st.present || !st.card_ready || st.mapped_lin == 0 {
         return 2;
     }
+    let status = unsafe { mmio_r32(st.mapped_lin, REG_CARDSTATUS) };
+    if status == u32::MAX || status & STS_CARD_PRESENT_0 == 0 {
+        st.card_ready = false;
+        return 5;
+    }
     let dst = unsafe { &mut *(out_ptr as *mut [u8; 512]) };
     match unsafe { sd_read_one_sector(st, lba, dst) } {
         Ok(()) => 0,
@@ -788,24 +840,50 @@ pub extern "C" fn gate1_sd_read_sec(lba: u32, out_ptr: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn gate1_sd_shutdown() -> u32 {
     let st = sd_state();
+    st.card_ready = false;
     if st.present && st.mapped_lin != 0 {
         let base = st.mapped_lin;
         unsafe {
-            mmio_w32(base, REG_INTMASKCARD, 0xFFFF_FFFF);
-            mmio_w16(base, REG_SDIO_LEDCTRL, 0);
-            mmio_w16(base, REG_SDIO_CLOCKNWAIT, 0);
-            mmio_w16(base, REG_CARDCLOCKCTRL, 0);
-            pci_write8(st.bus, st.dev, st.func, CFG_POWER1, PWR1_OFF);
-            pci_write8(st.bus, st.dev, st.func, CFG_CLKSTOP, 0);
+            if mmio_r32(base, REG_CARDSTATUS) != u32::MAX {
+                mmio_w32(base, REG_INTMASKCARD, 0xFFFF_FFFF);
+                mmio_w16(base, REG_SDIO_LEDCTRL, 0);
+                mmio_w16(base, REG_SDIO_CLOCKNWAIT, 0);
+                mmio_w16(base, REG_CARDCLOCKCTRL, 0);
+                pci_write8(st.bus, st.dev, st.func, CFG_POWER1, PWR1_OFF);
+                pci_write8(st.bus, st.dev, st.func, CFG_CLKSTOP, 0);
+            }
+            // Release the page-aligned reservation, not the register offset.
+            if crate::sd_unmap_mmio(base & !0xFFF) == 0 {
+                return 6;
+            }
+            pci_write32(st.bus, st.dev, st.func, 0x04, st.original_cmd);
+            if st.original_pmcsr & 3 != 0 {
+                pci_write32(st.bus, st.dev, st.func, 0x84, st.original_pmcsr & !0x8000);
+            }
         }
+        st.present = false;
+        st.mapped_lin = 0;
+        st.mapped_phys = 0;
     }
-    st.card_ready = false;
+    if st.claimed && unsafe { crate::sd_release_bdf(st.bdf()) } != 0 {
+        return 7;
+    }
+    *st = ToshSdState::new();
     0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sector_argument_checks_capacity_and_byte_address_overflow() {
+        assert_eq!(sector_argument(true, 100, 99), Some(99));
+        assert_eq!(sector_argument(false, 100, 99), Some(99 * 512));
+        assert_eq!(sector_argument(true, 100, 100), None);
+        assert_eq!(sector_argument(false, u32::MAX, 0x0080_0000), None);
+        assert_eq!(sector_argument(false, 0, 0), None);
+    }
 
     #[test]
     fn decode_csd_v2_sdhc_4gb() {

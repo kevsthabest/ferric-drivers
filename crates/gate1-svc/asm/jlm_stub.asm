@@ -16,6 +16,7 @@ bits 32
 ; JLM / VMM constants verified against vendor/ref/jemm/Include/JLM.INC
 GATE1_DEVICE_ID         equ 0xFD01
 DLL_PROCESS_ATTACH      equ 1
+VMM_GET_DDB             equ 48
 DLL_PROCESS_DETACH      equ 0
 VMM_SIMULATE_FAR_RET    equ 13          ; VMM_Service Simulate_Far_Ret (0x0D in JLM.INC:94)
 VMM_SIMULATE_FAR_CALL   equ 11          ; VMM_Service Simulate_Far_Call (JLM.INC order: 11)
@@ -514,8 +515,13 @@ _v86_net_init_call:
     push dword [net_dma_seg]
     call gate1_net_init
     add esp, 4
-    or eax, eax
-    jnz .nic_up
+    cmp eax, 1
+    je .nic_up
+    cmp eax, 2
+    jne .nic_fail
+    mov word [ebp + CLIENT_EAX], 5 ; retain DMA until reboot
+    ret
+.nic_fail:
     mov word [ebp + CLIENT_EAX], 3
     ret
 .nic_up:
@@ -2101,6 +2107,34 @@ DllMain:
     mov eax, [esp + 8]                      ; dwReason
     cmp eax, DLL_PROCESS_ATTACH
     jne .check_detach
+    ; Temporary whole-module exclusion until the shared claim service exists.
+    push edi
+    xor edi, edi
+    mov eax, 0xFD05
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
+    xor edi, edi
+    mov eax, 0xFD06
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
+    xor edi, edi
+    mov eax, 0xFD08
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
+    xor edi, edi
+    mov eax, 0xFD09
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
+    xor edi, edi
+    mov eax, 0xFD0A
+    VMMCall VMM_GET_DDB
+    test ecx, ecx
+    jnz .attach_conflict
+    pop edi
     call gate1_svc_reset
     ; This PE is only ever loaded by JLOAD, so Jemm's VDMAD services are
     ; guaranteed present here; the standalone harness never runs DllMain.
@@ -2174,6 +2208,10 @@ DllMain:
     mov dword [mouse_irq_installed], 1
 .attach_done:
     mov eax, 1                              ; success -> keep JLM resident
+    ret 12
+.attach_conflict:
+    pop edi
+    xor eax, eax
     ret 12
 .check_detach:
     cmp eax, DLL_PROCESS_DETACH

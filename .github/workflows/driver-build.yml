@@ -1,0 +1,38 @@
+name: Driver build and host tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: driver-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build pinned toolchain image
+        run: docker build -t ferric-drivers-build .
+      - name: Host tests and target module builds
+        run: docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-drivers.sh
+      - name: Standalone Ethernet and wireless gate QEMU smoke tests
+        run: docker run --rm -v "$PWD:/work" -w /work ferric-drivers-build sh scripts/test-ethernet-qemu.sh
+      - name: Upload driver binaries and runtime logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferric-drivers-${{ github.sha }}
+          path: |
+            out/*.JLM
+            out/*.COM
+            out/WIFIGATE.BAT
+            docs/wireless-qualification.md
+            out/ethernet-qemu/*.log
+            out/ethernet-qemu/*.txt
+          if-no-files-found: warn

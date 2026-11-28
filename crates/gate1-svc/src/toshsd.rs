@@ -271,7 +271,7 @@ unsafe fn find_toshsd_pci() -> Option<(u8, u8, u8, u16, u8, u32)> {
             let did = (id >> 16) as u16;
             if vid == TOSHIBA_VID && (did == TOSHSD_DID_A || did == TOSHSD_DID_B) {
                 let rev = (unsafe { pci_read32(0, dev, func, 0x08) } & 0xFF) as u8;
-                let bar0 = unsafe { pci_read32(0, dev, func, 0x10) } & 0xFFFF_F000;
+                let bar0 = unsafe { pci_read32(0, dev, func, 0x10) };
                 return Some((0, dev, func, did, rev, bar0));
             }
         }
@@ -363,10 +363,18 @@ unsafe fn sd_send_cmd(base: u32, opcode: u16, arg: u32, flags: u16) -> Result<[u
     Ok(resp)
 }
 
+/// Convert a bounded logical sector into the card's command argument.
+fn sector_argument(is_sdhc: bool, sectors: u32, lba: u32) -> Option<u32> {
+    if lba >= sectors {
+        return None;
+    }
+    if is_sdhc { Some(lba) } else { lba.checked_mul(512) }
+}
+
 /// Read one 512-byte sector at `lba` using `CMD17` (strictly read-only PIO).
 unsafe fn sd_read_one_sector(st: &ToshSdState, lba: u32, dst: &mut [u8; 512]) -> Result<(), u32> {
     let base = st.mapped_lin;
-    let arg = if st.is_sdhc { lba } else { lba.wrapping_mul(512) };
+    let arg = sector_argument(st.is_sdhc, st.sectors, lba).ok_or(4u32)?;
 
     unsafe {
         mmio_w16(base, REG_SDIO_LEDCTRL, 1);
@@ -524,19 +532,18 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
             o.crlf();
             return o.pos as u32;
         };
-        st.present = true;
         st.bus = bus;
         st.dev = dev;
         st.func = func;
         st.did = did;
         st.rev = rev;
 
-        let mut bar = bar0;
-        if bar == 0 {
+        // Keep the integrated compatibility allocator for an unassigned BAR only.
+        let bar = if bar0 == 0 {
             match unsafe { ehci::assign_mmio_bar(bus, dev, func, 0x1000) } {
                 Some(base) => {
-                    bar = base;
                     st.bar_assigned = true;
+                    base
                 }
                 None => {
                     o.str("SD: failed to assign 4 KiB MMIO BAR0");
@@ -544,13 +551,19 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
                     return o.pos as u32;
                 }
             }
-        }
+        } else if let Some(base) = ferric_hw::memory_bar32(bar0) {
+            base
+        } else {
+            o.str("SD: invalid 32-bit MMIO BAR0");
+            o.crlf();
+            return o.pos as u32;
+        };
         st.bar_phys = bar;
 
         // Wake PCI PMCSR (0x84) to D0 if in D3
         let pmcsr = unsafe { pci_read32(bus, dev, func, 0x84) };
         if (pmcsr & 0x0003) != 0 {
-            unsafe { pci_write32(bus, dev, func, 0x84, pmcsr & !0x0003) };
+            unsafe { pci_write32(bus, dev, func, 0x84, pmcsr & !0x8003) };
             cardbus::delay_ms(10);
         }
 
@@ -558,15 +571,34 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         let cmd = unsafe { pci_read32(bus, dev, func, 0x04) };
         unsafe { pci_write32(bus, dev, func, 0x04, (cmd & 0xFFFF) | 0x0002) };
 
-        let lin = unsafe { cardbus::map_mmio(bar, 1) };
-        if lin == 0 {
+        // Highest accessed register is the 16-bit LED control at 0x13E.
+        let window = ferric_hw::MmioWindow::new(bar, 0x140);
+        let lin = window.and_then(|w| {
+            let mapped_page = unsafe { cardbus::map_mmio(w.page_base, w.page_count) };
+            w.linear_base(mapped_page)
+        });
+        let Some(lin) = lin else {
             o.str("SD: map_mmio failed for BAR0=0x");
             o.hex32(bar);
             o.crlf();
+            // Restore the original PCI command and power state on failed mapping.
+            unsafe {
+                if st.bar_assigned {
+                    pci_write32(bus, dev, func, 0x04, cmd & 0xFFFD);
+                    pci_write32(bus, dev, func, 0x10, bar0);
+                    st.bar_assigned = false;
+                }
+                pci_write32(bus, dev, func, 0x04, cmd & 0xFFFF);
+                if (pmcsr & 3) != 0 {
+                    // PME status is W1C; do not echo it as a one.
+                    pci_write32(bus, dev, func, 0x84, pmcsr & !0x8000);
+                }
+            }
             return o.pos as u32;
-        }
+        };
         st.mapped_phys = bar;
         st.mapped_lin = lin;
+        st.present = true;
     }
 
     o.str("SD: Toshiba 1179:");
@@ -714,7 +746,12 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
 
     // CMD16: SET_BLOCKLEN = 512 (required for SDSC)
     if !st.is_sdhc {
-        let _ = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) };
+        if let Err(e) = unsafe { sd_send_cmd(base, 16, 512, CMD_RESP_R1) } {
+            o.str("SD: CMD16 failed sts=0x");
+            o.hex32(e);
+            o.crlf();
+            return o.pos as u32;
+        }
     }
 
     // Switch clock to 16.5 MHz (div=2)
@@ -722,7 +759,7 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
         mmio_w16(base, REG_CARDCLOCKCTRL, CLK_ENABLE | CLK_DIV_2);
         cardbus::delay_ms(5);
     }
-    st.card_ready = true;
+    // Do not publish readiness until the first sector read succeeds.
 
     // Report card summary
     o.str("SD Card: ");
@@ -748,6 +785,7 @@ pub extern "C" fn gate1_sd_init(out_ptr: u32, out_cap: u32) -> u32 {
     let mut sec0 = [0u8; 512];
     match unsafe { sd_read_one_sector(st, 0, &mut sec0) } {
         Ok(()) => {
+            st.card_ready = true;
             o.str("  Sector 0: OK  fs=");
             o.str(detect_sector0_label(&sec0));
             o.str("  sig=");
@@ -775,6 +813,11 @@ pub extern "C" fn gate1_sd_read_sec(lba: u32, out_ptr: u32) -> u32 {
     let st = sd_state();
     if !st.present || !st.card_ready || st.mapped_lin == 0 {
         return 2;
+    }
+    let status = unsafe { mmio_r32(st.mapped_lin, REG_CARDSTATUS) };
+    if status == u32::MAX || status & STS_CARD_PRESENT_0 == 0 {
+        st.card_ready = false;
+        return 5;
     }
     let dst = unsafe { &mut *(out_ptr as *mut [u8; 512]) };
     match unsafe { sd_read_one_sector(st, lba, dst) } {
@@ -806,6 +849,15 @@ pub extern "C" fn gate1_sd_shutdown() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sector_argument_checks_capacity_and_byte_address_overflow() {
+        assert_eq!(sector_argument(true, 100, 99), Some(99));
+        assert_eq!(sector_argument(false, 100, 99), Some(99 * 512));
+        assert_eq!(sector_argument(true, 100, 100), None);
+        assert_eq!(sector_argument(false, u32::MAX, 0x0080_0000), None);
+        assert_eq!(sector_argument(false, 0, 0), None);
+    }
 
     #[test]
     fn decode_csd_v2_sdhc_4gb() {
