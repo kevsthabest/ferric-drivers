@@ -25,3 +25,7 @@ bridge programs fixed bus numbers and windows, and enables child mastering
 early; those behaviors must not be copied blindly into the standalone module.
 QEMU does not emulate the target AR2413, so host tests and physical evidence
 are essential. No changes to Ferric DOS main.
+
+## Resource validation checkpoint
+
+FRES now recognizes physical MMIO interval and secondary-bus claims (kinds 6 and 7). The shared CardBus library validates proposed socket and bridge apertures, inclusive page limits, alignment, overlaps, bus collisions and IRQ bounds. This is pure validation only: discovering trustworthy occupied firmware ranges and wiring claims into a resident bridge remain prerequisites to hardware writes. No standalone power-up is enabled yet.

@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
+pub mod resources;
+
 pub const TOPIC95_VID: u16 = 0x1179;
 pub const TOPIC95_DID: u16 = 0x0617;
 pub const TOPIC95_PCI_DEV: u8 = 17; // 00:11.0 and 00:11.1

@@ -75,6 +75,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: extracted ToPIC95 slot profile, socket decoding and 40-byte ABI into ferric-cardbus; invalid slot indices rejected. [CardBus extraction gates](docs/cardbus-extraction.md). No standalone bridge yet.
 
+- I.3: FRES resource kinds 6/7 added for MMIO intervals and secondary bus ownership; CardBus pure layout validation covers alignment, inclusive bridge limits and occupied resource conflicts. Hardware discovery and transactional claim/rollback remain pending.
+
 ## Immediate backlog
 - Ethernet: rerun QEMU smoke after archive selection fix; verify real packet exchange and lifecycle before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.
