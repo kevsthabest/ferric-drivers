@@ -1066,23 +1066,7 @@ const AR5K_TSF_L32: usize = 0x804C;
 
 /// Fixed 160-byte `#[repr(C)]` request/response struct shared with `WCONN.COM`
 /// via JLM V86 API `AX=0x000C`.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct WifiConnectReq {
-    pub ssid_len: u8,
-    pub pass_len: u8,
-    pub status: u8,
-    pub channel: u8,
-    pub bssid: [u8; 6],
-    pub sta_mac: [u8; 6],
-    pub ssid: [u8; 32],
-    pub passphrase: [u8; 64],
-    pub reserved: [u8; 48],
-}
-
-const _: () = {
-    assert!(core::mem::size_of::<WifiConnectReq>() == 160);
-};
+pub use ferric_ath5k::connection::WifiConnectReq;
 
 /// Extra entropy for the SNonce from what this platform can offer: the
 /// CMOS RTC time/date bytes, a free-running PIT channel-0 count, and EEPROM

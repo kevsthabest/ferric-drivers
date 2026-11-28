@@ -37,3 +37,7 @@ CI 44ac8d5 passed. The VDMAD adapter and shared radio/engine functions are wired
 ## Passive scan
 
 Shared scan ABI and bounded passive scan engine (channels 1–11) use injected register/DMA I/O. Resident scan transaction uses the DMA lease and always attempts shutdown, retaining the lock on cleanup failure. Host mocks cover empty scan and timer abort. Integrated scan uses shared result ABI but retains its original hardware loop. Scan remains internal and activation-gated; no DOS client is permitted to free a possibly active DMA allocation.
+
+## WPA2 connection orchestration
+
+Shared `connection::connect` coordinates bounded open-system authentication, WPA2 association and the existing wifi-core four-way handshake over an injected LinkIo transport. It validates response address/identity, rejects short credentials and zero SNonce, requires ACK before installing keys, and retains the handshake object for group rekey. The caller must provide fresh unpredictable SNonce, verified AP/security selection and a leased transport. Integrated runtime still uses its original connection loop with the shared request ABI; resident hardware transport and full successful handshake tests remain pending.

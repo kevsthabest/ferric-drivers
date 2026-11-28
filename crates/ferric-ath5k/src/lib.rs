@@ -11,6 +11,7 @@ pub mod engine;
 pub mod dma_lease;
 pub mod probe;
 pub mod scan;
+pub mod connection;
 
 const AR5K_SREV_AR5212_V4: u32 = 0x54;
 const AR5K_EEPROM_VERSION_5_0: u16 = 0x5000;
