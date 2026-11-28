@@ -5,6 +5,7 @@
 use core::cell::UnsafeCell;
 use ferric_cardbus::CardBusSlotInfo;
 use ferric_ath5k::dma_lease::Lease;
+use ferric_ath5k::scan::WifiScanResult;
 use ferric_ath5k::probe::{WifiProbeInfo,read_revision,probe_mapped};
 mod registers;
 mod dma_platform;
@@ -32,10 +33,10 @@ unsafe fn ath_cb_master(_:u32,_:u32)->u32{5}
 unsafe fn ath_map(_:u32,_:u32)->u32{0}
 #[cfg(test)]
 unsafe fn ath_unmap(_:u32)->u32{0}
-struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo}
+struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo,scan:WifiScanResult}
 struct Cell(UnsafeCell<Resident>);
 unsafe impl Sync for Cell{}
-static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO}));
+static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO,scan:WifiScanResult::ZERO}));
 fn state()->&'static mut Resident{unsafe{&mut *STATE.0.get()}}
 fn eligible(info:&CardBusSlotInfo)->bool{
     info.present!=0&&info.stage==5&&info.card_present!=0&&info.is_cardbus!=0&&info.powered_3v3!=0&&
@@ -79,6 +80,22 @@ pub extern "C" fn ath_dma_start(seg:u32)->u32{
     let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
     match s.dma.start(&mut io,seg<<4){Ok(_)=>0,Err(_)=>if s.dma.can_unload(){9}else{7}}
 }
+/// Internal scan transaction. No DOS DMA service until the allocation
+/// lifetime and drain gate are qualified.
+#[unsafe(no_mangle)]
+pub extern "C" fn ath_scan(seg:u32)->u32{
+    let status=ath_dma_start(seg);
+    if status!=0{return status;}
+    let s=state();
+    let (Some(slot),Some(region))=(s.slot,s.dma.region())else{return 7;};
+    let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
+    let result={
+        let mut scan_io=dma_platform::ScanAdapter{mmio:&mut io.mmio,region};
+        ferric_ath5k::scan::passive_scan(&mut scan_io,region,&mut s.scan)
+    };
+    if s.dma.shutdown(&mut io).is_err(){return 7;}
+    if result.is_ok(){0}else{8}
+}
 /// Ring-0 caller provides a writable 44-byte ABI buffer. DOS wrapper bounds it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
@@ -102,7 +119,7 @@ pub extern "C" fn ath_shutdown()->u32{
         s.linear=0;
     }
     if unsafe{ath_cb_release(slot)}!=0{return 7;}
-    s.slot=None;s.info=WifiProbeInfo::ZERO;0
+    s.slot=None;s.info=WifiProbeInfo::ZERO;s.scan=WifiScanResult::ZERO;0
 }
 #[cfg(test)]
 mod tests{

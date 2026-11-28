@@ -43,3 +43,24 @@ fn unlock(l:u32,n:u32)->bool{
 fn lock(_:u32,_:u32)->Option<u32>{None}
 #[cfg(not(target_arch="x86"))]
 fn unlock(_:u32,_:u32)->bool{false}
+
+pub struct ScanAdapter<'a>{pub mmio:&'a mut Mmio,pub region:Region}
+impl RegisterIo for ScanAdapter<'_>{
+    fn read(&mut self,o:usize)->u32{self.mmio.read(o)}
+    fn write(&mut self,o:usize,v:u32){self.mmio.write(o,v)}
+    fn delay_ms(&mut self,ms:u32)->bool{self.mmio.delay_ms(ms)}
+}
+impl ferric_ath5k::scan::ScanIo for ScanAdapter<'_>{
+    fn dma_read(&mut self,o:usize)->u32{
+        if o>WIFI_DMA_SIZE-4||o&3!=0{return 0;}
+        unsafe{core::ptr::read_volatile((self.region.linear as usize+o)as *const u32)}
+    }
+    fn dma_write(&mut self,o:usize,v:u32){
+        if o<=WIFI_DMA_SIZE-4&&o&3==0{unsafe{core::ptr::write_volatile((self.region.linear as usize+o)as *mut u32,v)}}
+    }
+    fn copy_frame(&mut self,o:usize,dst:&mut [u8])->bool{
+        if o.checked_add(dst.len()).is_none_or(|end|end>WIFI_DMA_SIZE){return false;}
+        for (i,v) in dst.iter_mut().enumerate(){*v=unsafe{core::ptr::read_volatile((self.region.linear as usize+o+i)as *const u8)};}
+        true
+    }
+}

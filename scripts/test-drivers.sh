@@ -19,14 +19,17 @@ test_crate() {
 build_lib() {
     name="$1"
     path="$2"
-    rustc --crate-type rlib --edition 2024 --crate-name "$name" "$path" -o "$tmp/lib$name.rlib"
+    shift 2
+    rustc --crate-type rlib --edition 2024 --crate-name "$name" "$path" "$@" -o "$tmp/lib$name.rlib"
 }
-for crate in abi ferric-hw wifi-core ferric-ehci ferric-i8255x ferric-cardbus ferric-ath5k; do
+for crate in abi ferric-hw wifi-core ferric-ehci ferric-i8255x ferric-cardbus; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     path="crates/$crate/src/lib.rs"
     build_lib "$name" "$path"
     test_crate "$name" "$path"
 done
+build_lib ferric_ath5k crates/ferric-ath5k/src/lib.rs --extern "wifi_core=$tmp/libwifi_core.rlib"
+test_crate ferric_ath5k crates/ferric-ath5k/src/lib.rs --extern "wifi_core=$tmp/libwifi_core.rlib"
 for crate in ferric-exfat ferric-ntfs ferric-vbe; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "abi=$tmp/libabi.rlib"
@@ -36,7 +39,7 @@ for crate in ferric-pmu ferric-sd ferric-res; do
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "ferric_hw=$tmp/libferric_hw.rlib"
 done
 test_crate ferric_ath_provider crates/ferric-ath-provider/src/lib.rs \
-    --extern "ferric_ath5k=$tmp/libferric_ath5k.rlib" \
+    -L "dependency=$tmp" --extern "ferric_ath5k=$tmp/libferric_ath5k.rlib" \
     --extern "ferric_cardbus=$tmp/libferric_cardbus.rlib"
 test_crate ferric_cb_provider crates/ferric-cb-provider/src/lib.rs \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \
@@ -46,7 +49,7 @@ test_crate ferric_ethernet crates/ferric-ethernet/src/lib.rs \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \
     --extern "ferric_i8255x=$tmp/libferric_i8255x.rlib"
 test_crate gate1_svc crates/gate1-svc/src/lib.rs \
-    --extern "ferric_ath5k=$tmp/libferric_ath5k.rlib" \
+    -L "dependency=$tmp" --extern "ferric_ath5k=$tmp/libferric_ath5k.rlib" \
     --extern "ferric_cardbus=$tmp/libferric_cardbus.rlib" \
     --extern "abi=$tmp/libabi.rlib" \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \

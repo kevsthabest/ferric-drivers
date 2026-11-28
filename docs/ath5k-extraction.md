@@ -33,3 +33,7 @@ CI fca637b passed. Both integrated and resident backends now use the shared 44-b
 ## Resident DMA adapter
 
 CI 44ac8d5 passed. The VDMAD adapter and shared radio/engine functions are wired into the resident lease; unlock checks carry and uses PCI flags 0 consistently with lock. Radio tuning reports calibration and delay failure. DMA start is deliberately not exported through DOS and fails before lock while DRAIN_QUALIFIED is false. No physical drain or DOS allocation lifetime proof is claimed.
+
+## Passive scan
+
+Shared scan ABI and bounded passive scan engine (channels 1–11) use injected register/DMA I/O. Resident scan transaction uses the DMA lease and always attempts shutdown, retaining the lock on cleanup failure. Host mocks cover empty scan and timer abort. Integrated scan uses shared result ABI but retains its original hardware loop. Scan remains internal and activation-gated; no DOS client is permitted to free a possibly active DMA allocation.
