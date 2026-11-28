@@ -35,3 +35,7 @@ qualification is pending.
 Acceptance: load FRES alone; register two test clients; conflicting PCI
 and I/O claims fail; unload while a client exists fails; release and
 unregister; unload succeeds. Repeat and verify conventional memory.
+
+### Stage I.3 resource extensions
+
+Kind 6: physical MMIO interval (a=base, b=byte length). Kind 7: exclusive secondary PCI bus number (a=1..255, b=0). Existing ABI 1.0 verbs and kinds are unchanged; new clients must verify the new kinds are accepted before touching hardware. Reservations coordinate participating drivers only; they do not establish that firmware or unregistered devices leave the range free. The bridge owns the parent aperture; child mapping is delegated, not a second independent overlapping reservation.

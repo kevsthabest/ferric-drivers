@@ -9,6 +9,8 @@ pub enum Resource {
     Irq(u8),
     Dma(u8),
     Vector(u8),
+    Mmio { base: u32, len: u32 },
+    PciBus(u8),
 }
 
 impl Resource {
@@ -19,6 +21,8 @@ impl Resource {
             Self::Irq(n) => n < 16,
             Self::Dma(n) => n < 8 && n != 4,
             Self::Vector(_) => true,
+            Self::Mmio { base, len } => base != 0 && len != 0 && u64::from(base) + u64::from(len) <= 0x1_0000_0000,
+            Self::PciBus(bus) => bus != 0,
         }
     }
 
@@ -26,6 +30,9 @@ impl Resource {
         match (self, other) {
             (Self::Io { base: a, len: al }, Self::Io { base: b, len: bl }) => {
                 u32::from(a) < u32::from(b) + bl && u32::from(b) < u32::from(a) + al
+            }
+            (Self::Mmio { base: a, len: al }, Self::Mmio { base: b, len: bl }) => {
+                u64::from(a) < u64::from(b) + u64::from(bl) && u64::from(b) < u64::from(a) + u64::from(al)
             }
             (a, b) => a == b,
         }
@@ -110,5 +117,24 @@ mod tests {
         assert_eq!(t.claim(2, Resource::Dma(4)), Err(ClaimError::Invalid));
         assert_eq!(t.release(1, Resource::Vector(0x60)), Ok(()));
         assert_eq!(t.claim(2, Resource::Dma(1)), Ok(()));
+    }
+}
+
+#[cfg(test)]
+mod bridge_tests {
+    use super::*;
+    #[test]
+    fn mmio_and_bus_reservations() {
+        let mut t = ClaimTable::<4>::new();
+        let a = Resource::Mmio { base: 0xF7D0_0000, len: 0x100000 };
+        assert_eq!(t.claim(1,a), Ok(()));
+        assert_eq!(t.claim(2,Resource::Mmio { base: 0xF7DF_F000, len: 0x1000 }), Err(ClaimError::Busy));
+        assert_eq!(t.claim(2,Resource::Mmio { base: 0xF7E0_0000, len: 0x1000 }), Ok(()));
+        assert_eq!(t.claim(2,Resource::Mmio { base: 0xFFFF_F000, len: 0x2000 }), Err(ClaimError::Invalid));
+        assert_eq!(t.claim(2,Resource::PciBus(0)), Err(ClaimError::Invalid));
+        assert_eq!(t.claim(1,Resource::PciBus(2)), Ok(()));
+        assert_eq!(t.claim(2,Resource::PciBus(2)), Err(ClaimError::Busy));
+        assert_eq!(t.release(1,a), Ok(()));
+        assert_eq!(t.claim(2,a), Ok(()));
     }
 }

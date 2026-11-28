@@ -60,6 +60,7 @@ const TOPIC_SLOT_CARD_CTRL: u8 = 0xA0; // [7:0]=0xA0 Slot Ctrl, [15:8]=0xA1 Card
 const TOPIC_SLOT_SLOTON: u8 = 0x80;
 const TOPIC_SLOT_SLOTEN: u8 = 0x40;
 const TOPIC_CCR_INTA: u8 = 0x10;
+const TOPIC97_ICR_IRQSEL: u8 = 0x01;
 const TOPIC_CDR_MODE_PC32: u8 = 0x80;
 const CB_SOCKET_EVENT: usize = 0x00;
 const CB_SOCKET_MASK: usize = 0x04;

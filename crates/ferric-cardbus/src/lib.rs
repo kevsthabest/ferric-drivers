@@ -19,7 +19,6 @@ pub const CB_BRIDGE_ISAEN: u16 = 0x0004;
 pub const CB_BRIDGE_VGAEN: u16 = 0x0008;
 
 // Toshiba ToPIC95/97 config registers (topic.h:36-81).
-const TOPIC97_ICR_IRQSEL: u8 = 0x01;
 
 // Standard CardBus Socket MMIO registers (at BAR0) and ExCA (at BAR0 + 0x800).
 
@@ -57,7 +56,7 @@ pub const fn slot_resources(slot: usize) -> Option<SlotResources> {
             irq_line: 11,
         })
     } else if slot == 1 {
-        SlotResources {
+        Some(SlotResources {
             sec_bus: 3,
             bar0_phys: 0xF7E0_1000,
             mem0_base: 0xF7C0_0000,

@@ -67,6 +67,8 @@ fn decode(kind: u32, a: u32, b: u32) -> Option<Resource> {
         3 if a < 16 && b == 0 => Some(Resource::Irq(a as u8)),
         4 if a < 8 && b == 0 => Some(Resource::Dma(a as u8)),
         5 if a <= 255 && b == 0 => Some(Resource::Vector(a as u8)),
+        6 => Some(Resource::Mmio { base: a, len: b }),
+        7 if a > 0 && a <= 255 && b == 0 => Some(Resource::PciBus(a as u8)),
         _ => None,
     }
 }
