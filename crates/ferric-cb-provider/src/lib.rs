@@ -115,12 +115,10 @@ pub extern "C" fn cb_start_audited(slot:u32)->u32 {
     if !ferric_cardbus::dynabook::matches_capture(&mut AuditPci){return 5;}
     // Read-only PCI audit does not authorize any physical address range.
     // This gate must not be bypassed by a future V86 wrapper.
-    const EVIDENCE:ferric_cardbus::authorization::Evidence<'static>=ferric_cardbus::authorization::Evidence{
-        root_windows:&[],occupied:&[ferric_cardbus::dynabook::AGP,ferric_cardbus::dynabook::GRAPHICS],
-        occupied_buses:&[1,3,4],complete:false,
-    };
+    const EVIDENCE:ferric_cardbus::authorization::Evidence<'static>=ferric_cardbus::dynabook::EVIDENCE;
     let Some(r)=ferric_cardbus::slot_resources(0)else{return 1;};
     if !ferric_cardbus::dynabook::endpoint_bounds_clear(r){return 5;}
+    if ferric_cardbus::authorization::check_known(0,r,&EVIDENCE).is_err(){return 5;}
     if ferric_cardbus::authorization::check(0,r,&EVIDENCE).is_err(){return 6;}
     // A PCI-only scan is insufficient; platform firmware authorization remains absent.
     let cell=&mut slots()[slot as usize];if cell.is_some(){return 2;}

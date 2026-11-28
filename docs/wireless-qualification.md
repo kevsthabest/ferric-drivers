@@ -82,3 +82,13 @@ For a standards-compliant naturally aligned power-of-two PCI memory BAR, its max
 | SD F7EBDC00 | 1 KiB |
 
 None of these upper-bound intervals intersects the proposed slot 0 window or socket. The implementation checks the intervals separately from firmware authorization, rejects zero or unsupported BAR types, and tests an intentional overlap. This removes the need to write sizing patterns to these assigned conventional BARs for the narrow non-overlap question, assuming compliant devices. It does not cover hard-decoded ranges, unassigned BARs, proprietary chipset resources, or root forwarding. Root _CRS and motherboard reservations remain the real blocker; see https://docs.kernel.org/5.19/PCI/acpi-info.html. The previous BIOS reference identifies a 20,765-byte DSDT in ACPIHI.BIN at offset 0x110, but the raw binary was unavailable during this review; do not infer its evaluated _CRS from strings. Reuse that exact capture for offline AML disassembly, without repeating PCI captures. No activation or DMA gate changes.
+
+## Gate B: firmware-derived root windows (BIOS 1.20)
+The private owner's live ACPIHI.BIN at 0x110 and HIGHROM.BIN at 0x30110 contain an identical 20,765-byte DSDT, checksum zero, SHA-256 f1ff0461d9bcee3ba58ca7cdec09e98e05f4cb5ae88c99052ec4929d1375890a. Only decoded observations are recorded here, not OEM AML/ROM files. PCI0 (PNP0A03) has a static _CRS buffer with DWord memory producer descriptors at DSDT offsets 0x7B7, 0x7D1, 0x7EB; translation zero:
+- 000A0000–000BFFFF (length 00020000)
+- 000D8000–000DFFFF (length 00008000)
+- 40100000–FEE9FFFF (length BEDA0000)
+
+Both slot-zero candidate ranges lie in the high window. The profile now contains these windows and conservative endpoint bounds, AGP and graphics windows and the high ROM reservation. `check_known` validates supplied partial evidence separately from `check`, which still requires complete independent authorization. Tests cover containment, overlap and refusal on incomplete evidence.
+
+SYSR._CRS contains static I/O reservations, not a memory map. MEM (PNP0C01) _CRS returns CRS_(1), which marshals arguments into firmware scratch storage, requests a firmware SMI operation and returns a variable-length resource buffer. The original memory snapshot's scratch words are zero; that is NOT a live evaluation of the method. Do not execute raw SMI calls in DOS or infer absence of reservations. Gate B still requires a trustworthy evaluated motherboard resource map and reconciliation with PCI assignments, ideally from an existing supported OS boot on this exact device. Activation and DMA remain disabled; no private firmware binary is redistributed.

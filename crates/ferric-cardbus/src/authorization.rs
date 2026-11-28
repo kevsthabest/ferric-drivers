@@ -16,7 +16,15 @@ fn contains(a:Range,b:Range)->bool{
 /// and completeness; passing fabricated ranges cannot authorize hardware.
 pub fn check(slot:u8,r:SlotResources,e:&Evidence<'_>)->Result<(),Error>{
     if slot!=0{return Err(Error::Slot);}
-    if !e.complete||e.root_windows.is_empty()||e.occupied.is_empty(){return Err(Error::Incomplete);}
+    if !e.complete{return Err(Error::Incomplete);}
+    check_known(slot,r,e)
+}
+/// Validate all supplied windows and occupied ranges without claiming that
+/// they constitute a complete platform resource inventory. A successful
+/// result is NOT authorization; use check() before any hardware changes.
+pub fn check_known(slot:u8,r:SlotResources,e:&Evidence<'_>)->Result<(),Error>{
+    if slot!=0{return Err(Error::Slot);}
+    if e.root_windows.is_empty()||e.occupied.is_empty(){return Err(Error::Incomplete);}
     let ranges=validate(r,&[],e.occupied_buses).map_err(|_|Error::Layout)?;
     if e.root_windows.iter().any(|w|!w.valid())||e.occupied.iter().any(|w|!w.valid()){return Err(Error::Incomplete);}
     for r in ranges{
@@ -34,6 +42,7 @@ mod tests{
         let windows=[Range{base:0xf7c00000,len:0x300000}];
         let mut e=Evidence{root_windows:&windows,occupied:&occupied,occupied_buses:&[1,3,4],complete:false};
         assert_eq!(check(0,r,&e),Err(Error::Incomplete));
+        assert_eq!(check_known(0,r,&e),Ok(()));
         e.complete=true;assert_eq!(check(0,r,&e),Ok(()));
         assert_eq!(check(1,r,&e),Err(Error::Slot));
         let bad=[Range{base:0xf7c00000,len:0x200000}];e.root_windows=&bad;
