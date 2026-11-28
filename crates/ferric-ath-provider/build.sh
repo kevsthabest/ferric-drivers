@@ -11,6 +11,8 @@ nasm -f bin -o out/athstub.bin crates/ferric-ath-provider/asm/athstub.asm
 nasm -f bin -o out/ATHDIAG.COM crates/ferric-ath-provider/asm/athdiag.asm
 nasm -f bin -o out/ATHINIT.COM crates/ferric-ath-provider/asm/athinit.asm
 nasm -f bin -o out/ATHSCAN.COM crates/ferric-ath-provider/asm/athscan.asm
+nasm -f bin -o out/ATHCONN.COM crates/ferric-ath-provider/asm/athconn.asm
+nasm -f bin -o out/ATHSTOP.COM crates/ferric-ath-provider/asm/athstop.asm
 
 
 
@@ -31,7 +33,7 @@ python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 echo "[ferric-ath-provider] 3/5 Converting ELF32->COFF and assembling ath_jlm.asm..."
 python3 crates/gate1-svc/elf32_to_coff.py "${JLM_RUST_OBJ}" "${JLM_RUST_COFF}"
 nasm -f win32 -o "${JLM_STUB_OBJ}" crates/ferric-ath-provider/asm/ath_jlm.asm
-python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm crates/ferric-ath-provider/asm/athstub.asm crates/ferric-ath-provider/asm/athdiag.asm crates/ferric-ath-provider/asm/athinit.asm crates/ferric-ath-provider/asm/athscan.asm
+python3 scripts/check_asm_purity.py crates/ferric-ath-provider/asm/ath_jlm.asm crates/ferric-ath-provider/asm/athstub.asm crates/ferric-ath-provider/asm/athdiag.asm crates/ferric-ath-provider/asm/athinit.asm crates/ferric-ath-provider/asm/athscan.asm crates/ferric-ath-provider/asm/athconn.asm crates/ferric-ath-provider/asm/athstop.asm
 
 echo "[ferric-ath-provider] 4/5 Linking relocatable PE32 JLM out/ATH5K.DLL and PX-patching..."
 wlink format windows nt dll runtime native     file "${JLM_STUB_OBJ},${JLM_RUST_COFF}"     name "${JLM_DLL}"     option start=DllMain,quiet     export _ddb.1
