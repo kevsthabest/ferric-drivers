@@ -53,3 +53,7 @@ The specific pre-CBINIT capture (command 0007, BAR/windows zero, bus 3/4, rev 32
 ## Child enumeration
 
 The shared child layer recognizes only AR2413 (168C:001A, network class, type-0 single-function header), checks a 64 KiB aligned aperture inside the bridge window, and rejects preassigned BARs or active decode/mastering. Its reversible configuration enables memory decoding only; bus mastering remains the future Atheros DMA owner's responsibility after locked descriptors and quiescence checks. The adapter must acquire a child PCI claim before prepare, retain the returned snapshot even if verify fails, and release only after restoration. This layer is host-testable and not yet invoked by the resident provider.
+
+## Resident child lease
+
+The transaction coordinator now acquires the AR2413 BDF, retains a reversible child snapshot, verifies memory-only configuration, and restores the child before powering down the socket. The provider retains the BDF claim through failed cleanup; the Atheros consumer (FD0A) borrows the bridge-owned child through the session. Query reports stage 5 only for a present powered child. Activation remains unexported; child bus mastering and physical removal recovery are not implemented. CI checkpoint 670fc4c passed.

@@ -45,7 +45,24 @@ pub extern "C" fn cb_probe_count()->u32 {
 pub unsafe extern "C" fn cb_query(slot:u32,dst:*mut u8)->u32 {
     if slot>=2 || dst.is_null() { return 0; }
     let mut info=discover(slot,|f,o| unsafe { read32(0,TOPIC95_PCI_DEV,f,o) });
-    if let Some(a)=&slots()[slot as usize] { info.bar0_lin=a.hw.mapped(); }
+    if let Some(a)=&slots()[slot as usize] {
+        info.bar0_lin=a.hw.mapped();
+        if info.bar0_lin!=0 {
+            info.socket_state=a.hw.socket_state();
+            let d=ferric_cardbus::decode_socket_state(info.socket_state);
+            info.card_present=u8::from(d.card_present);
+            info.is_cardbus=u8::from(d.is_cardbus);
+            info.powered_3v3=u8::from(a.hw.socket_control()==ferric_cardbus::CB_SC_VCC_3V);
+            if let Some(child)=a.hw.child(){
+                if d.card_present && d.is_cardbus && info.powered_3v3!=0 {
+                    info.stage=5;info.card_vid=child.vendor;info.card_did=child.device;
+                    info.card_rev=child.revision;info.card_subsys_vid=child.subsystem as u16;
+                    info.card_subsys_did=(child.subsystem>>16) as u16;
+                    info.card_class=0x020000;info.card_bar0=child.bar;
+                }
+            }
+        }
+    }
     unsafe { core::ptr::copy_nonoverlapping((&info as *const CardBusSlotInfo).cast::<u8>(),dst,40) };
     1
 }
@@ -54,6 +71,9 @@ pub unsafe extern "C" fn cb_query(slot:u32,dst:*mut u8)->u32 {
 pub extern "C" fn cb_acquire(slot:u32,consumer:u32)->u32 {
     if slot>=2 || consumer==0 || consumer>0xffff{return 1;}
     let Some(a)=slots()[slot as usize].as_mut() else{return 5;};
+    if consumer!=0xfd0a || a.hw.child().is_none(){return 5;}
+    let d=ferric_cardbus::decode_socket_state(a.hw.socket_state());
+    if !d.card_present || !d.is_cardbus{return 5;}
     if a.session.attach(consumer as u16).is_ok(){0}else{2}
 }
 #[unsafe(no_mangle)]

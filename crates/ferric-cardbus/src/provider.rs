@@ -8,6 +8,9 @@ pub trait Platform: Broker + ConfigIo + SocketIo {
     fn close_socket(&mut self) -> bool;
     /// Validate child is quiescent before power removal.
     fn child_idle(&mut self) -> bool;
+    /// Prepare and release the bridge-owned child claim, with retryable cleanup.
+    fn prepare_child(&mut self) -> bool;
+    fn release_child(&mut self) -> bool;
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error { Busy, Resources, Config, Mapping, Power, Consumer, Cleanup }
@@ -19,11 +22,12 @@ pub struct Session {
     socket_attempted: bool,
     socket_open: bool,
     ready: bool,
+    child_attempted: bool,
 }
 impl Session {
     pub fn new(slot:u8,r:SlotResources,occupied:&[Range],buses:&[u8])->Result<Self,Error> {
         Ok(Self { lease:Lease::new(slot,r,occupied,buses).map_err(|_|Error::Resources)?,
-            resources:r,slot,snapshot:None,socket_attempted:false,socket_open:false,ready:false })
+            resources:r,slot,snapshot:None,socket_attempted:false,socket_open:false,ready:false,child_attempted:false })
     }
     pub fn start(&mut self,io:&mut impl Platform,rev:u8)->Result<u32,Error> {
         if self.lease.is_held() { return Err(Error::Busy); }
@@ -40,7 +44,10 @@ impl Session {
         self.socket_attempted=true;
         if !io.open_socket(r.bar0_phys){return Err(Error::Mapping);}
         self.socket_open=true;
-        power::power_on(io).map_err(|_|Error::Power)
+        let state=power::power_on(io).map_err(|_|Error::Power)?;
+        self.child_attempted=true;
+        if !io.prepare_child(){return Err(Error::Resources);}
+        Ok(state)
     }
     pub fn attach(&mut self,id:u16)->Result<(),Error> {
         if !self.ready{return Err(Error::Consumer);}
@@ -52,6 +59,10 @@ impl Session {
     pub fn stop(&mut self,io:&mut impl Platform)->Result<(),Error> {
         if self.lease.has_consumer(){return Err(Error::Consumer);}
         self.ready=false;
+        if self.child_attempted {
+            if !io.child_idle() || !io.release_child(){return Err(Error::Cleanup);}
+            self.child_attempted=false;
+        }
         if self.socket_open {
             if !io.child_idle(){return Err(Error::Cleanup);}
             power::power_off(io).map_err(|_|Error::Cleanup)?;

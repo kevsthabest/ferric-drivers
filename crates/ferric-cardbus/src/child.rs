@@ -73,3 +73,81 @@ mod tests{
         assert_eq!(enumerate(&mut m,r),Err(Error::Unsupported));
     }
 }
+
+use crate::lifecycle::{Broker,Claim};
+
+/// The bridge owns the child BDF while configured. The consumer borrows it
+/// through the session, rather than making a conflicting FRES claim.
+pub struct ChildLease {
+    claim:Claim,
+    held:bool,
+    snapshot:Option<ChildConfig>,
+    child:Option<Child>,
+}
+impl ChildLease {
+    pub fn new(bus:u8)->Self{
+        Self{claim:Claim{kind:1,a:u32::from(bus)<<8,b:0},held:false,snapshot:None,child:None}
+    }
+    pub fn setup(&mut self,io:&mut (impl ConfigIo+Broker),r:SlotResources)->Result<Child,Error>{
+        if self.held || self.claim.a!=u32::from(r.sec_bus)<<8{return Err(Error::Active);}
+        let c=enumerate(io,r)?;
+        if !io.claim(self.claim){return Err(Error::Active);}
+        self.held=true;
+        // Keep ownership even on an error, until cleanup is verified.
+        let result=(||{
+            let s=ChildConfig::prepare(io,c)?;
+            self.snapshot=Some(s);
+            ChildConfig::verify(io,c)?;
+            self.child=Some(c);
+            Ok(c)
+        })();
+        if result.is_err() && self.cleanup(io).is_err(){return Err(Error::Readback);}
+        result
+    }
+    pub fn cleanup(&mut self,io:&mut (impl ConfigIo+Broker))->Result<(),Error>{
+        if let Some(s)=&self.snapshot{
+            // Do not tear down an active bus master. If removed, the
+            // platform must prove isolation before releasing its claim.
+            let cmd=io.read(4);
+            if cmd==u32::MAX || cmd&4!=0{return Err(Error::Active);}
+            s.restore(io)?;
+            self.snapshot=None;
+            self.child=None;
+        }
+        if self.held{
+            if !io.release(self.claim){return Err(Error::Readback);}
+            self.held=false;
+        }
+        Ok(())
+    }
+    pub fn child(&self)->Option<Child>{self.child}
+    pub fn is_held(&self)->bool{self.held}
+}
+#[cfg(test)]
+mod lease_tests {
+    use super::*;
+    struct Mock { regs:[u32;64],held:bool,fail_release:bool,ignore_bar:bool }
+    impl ConfigIo for Mock{
+        fn read(&mut self,o:u8)->u32{self.regs[o as usize/4]}
+        fn write(&mut self,o:u8,v:u32){if !(o==0x10 && self.ignore_bar){self.regs[o as usize/4]=v;}}
+    }
+    impl Broker for Mock{
+        fn claim(&mut self,_:Claim)->bool{if self.held{return false;}self.held=true;true}
+        fn release(&mut self,_:Claim)->bool{if self.fail_release{return false;}self.held=false;true}
+    }
+    fn fixture()->Mock{
+        let mut m=Mock{regs:[0;64],held:false,fail_release:false,ignore_bar:false};
+        m.regs[0]=0x001a168c;m.regs[2]=0x02000001;m
+    }
+    #[test]fn active_dma_and_failed_release_pin_claim(){
+        let mut m=fixture();let r=crate::slot_resources(0).unwrap();let mut l=ChildLease::new(r.sec_bus);
+        assert!(l.setup(&mut m,r).is_ok());
+        m.regs[1]|=4;assert_eq!(l.cleanup(&mut m),Err(Error::Active));assert!(l.is_held());
+        m.regs[1]&=!4;m.fail_release=true;assert!(l.cleanup(&mut m).is_err());assert!(l.is_held());
+        m.fail_release=false;l.cleanup(&mut m).unwrap();assert!(!m.held);
+    }
+    #[test]fn readback_failure_reverses_setup(){
+        let mut m=fixture();m.ignore_bar=true;let r=crate::slot_resources(0).unwrap();let mut l=ChildLease::new(r.sec_bus);
+        assert_eq!(l.setup(&mut m,r),Err(Error::Readback));assert!(!l.is_held());assert_eq!(m.regs[1]&7,0);
+    }
+}

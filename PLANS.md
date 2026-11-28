@@ -96,6 +96,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: shared AR2413 child enumeration and reversible memory-only PCI configuration; refuses unsupported/active cards and keeps DMA disabled. Resident child claim and handoff wiring pending.
 
+- CI `670fc4c` passed. Added resident AR2413 child BDF lease, memory-only config, query and teardown integration; consumer FD0A borrows claimed child. Activation remains unexported; DMA and removal recovery pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

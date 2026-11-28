@@ -2,6 +2,16 @@
 //! Activation is restricted to explicitly supplied, audited resource layouts.
 use ferric_cardbus::{config::ConfigIo, lifecycle::{Broker,Claim}, power::SocketIo, provider::Platform, SlotResources, TOPIC95_PCI_DEV, CB_BRIDGE_CRST};
 use ferric_hw::pci::{read32,write32};
+use ferric_cardbus::child::{ChildLease,Child};
+struct ChildIo(u8);
+impl ConfigIo for ChildIo {
+    fn read(&mut self,o:u8)->u32{unsafe{read32(self.0,0,0,o)}}
+    fn write(&mut self,o:u8,v:u32){unsafe{write32(self.0,0,0,o,v)}}
+}
+impl Broker for ChildIo {
+    fn claim(&mut self,c:Claim)->bool{unsafe{cb_claim(c.kind,c.a,c.b)==0}}
+    fn release(&mut self,c:Claim)->bool{unsafe{cb_unclaim(c.kind,c.a,c.b)==0}}
+}
 
 #[cfg(not(test))]
 unsafe extern "C" {
@@ -19,10 +29,13 @@ unsafe fn cb_map(_:u32,_:u32)->u32{0}
 #[cfg(test)]
 unsafe fn cb_unmap(_:u32)->u32{0}
 
-pub struct Hardware { slot:u8, resources:SlotResources, linear:u32 }
+pub struct Hardware { slot:u8, resources:SlotResources, linear:u32, child:ChildLease }
 impl Hardware {
-    pub fn new(slot:u8,resources:SlotResources)->Self{Self{slot,resources,linear:0}}
+    pub fn new(slot:u8,resources:SlotResources)->Self{Self{slot,resources,linear:0,child:ChildLease::new(resources.sec_bus)}}
     pub fn mapped(&self)->u32{self.linear}
+    pub fn child(&self)->Option<Child>{self.child.child()}
+    pub fn socket_state(&self)->u32{self.r32(8)}
+    pub fn socket_control(&self)->u32{self.r32(0x10)}
     fn r32(&self,off:usize)->u32 {
         if self.linear==0{return u32::MAX;}
         unsafe{core::ptr::read_volatile((self.linear as usize+off) as *const u32)}
@@ -76,6 +89,12 @@ impl Platform for Hardware {
             self.linear=0;
         }
         true
+    }
+    fn prepare_child(&mut self)->bool{
+        self.child.setup(&mut ChildIo(self.resources.sec_bus),self.resources).is_ok()
+    }
+    fn release_child(&mut self)->bool{
+        self.child.cleanup(&mut ChildIo(self.resources.sec_bus)).is_ok()
     }
     fn child_idle(&mut self)->bool{
         // No consumer may be attached here. Refuse if the child still masters.
