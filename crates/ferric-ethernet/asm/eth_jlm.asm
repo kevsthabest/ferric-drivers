@@ -40,6 +40,8 @@ irq_hooked: dd 0
 irq_vector: dd 0
 timer_hooked: dd 0
 bridge_hooked: dd 0
+bridge_released: dd 0
+vector60_released: dd 0
 net_upcall_buf: times 8 dd 0
 net_saved_client: times 19 dd 0
 net_stub_info: times 3 dd 0
@@ -81,6 +83,13 @@ eth_release:
  add esp,16
  ret
 dispatch:
+ pushfd
+ cli
+ cld
+ call dispatch_locked
+ popfd
+ ret
+dispatch_locked:
  VMMCall VMM_SIMULATE_FAR_RET
  and dword [ebp+CLIENT_EFLAGS], ~1
  movzx eax, word [ebp+CLIENT_EAX]
@@ -124,6 +133,18 @@ _v86_net_stub_copy:
     movzx edx, word [ebp + CLIENT_EDI]
     add eax, edx
     push eax
+    push edx
+    push net_stub_info
+    call gate1_net_stub_info
+    add esp,4
+    pop edx
+    pop eax
+    mov ecx,[net_stub_info+4]
+    test ecx,ecx
+    jz .bad_copy_nopush
+    cmp cx,word [ebp+CLIENT_ECX]
+    ja .bad_copy_nopush
+    push eax
     cmp edx, 0xFE00
     ja .bad_copy
     cmp eax, 0xFFE00
@@ -136,6 +157,7 @@ _v86_net_stub_copy:
     ret
 .bad_copy:
     add esp, 4
+.bad_copy_nopush:
     mov dword [ebp + CLIENT_EAX], 0
     ret
 
@@ -147,8 +169,35 @@ _v86_net_init_call:
     mov word [ebp + CLIENT_EAX], 4
     ret
 .nic_go:
+    call gate1_net_probe
+    test eax,eax
+    jz .nic_fail
+    cmp dword [net_old_vec60_saved],1
+    jne .nic_fail
+    movzx eax, word [ebp + CLIENT_ECX]
+    test eax,eax
+    jz .nic_fail
+    cmp eax,0xFFE0
+    ja .nic_fail
+    shl eax,4
+    cmp dword [eax+3],0x20544B50
+    jne .nic_fail
+    cmp dword [eax+7],0x52565244
+    jne .nic_fail
+    movzx edx,word [ebp+CLIENT_ECX]
+    cmp word [eax+0x0C],dx
+    jne .nic_fail
     movzx eax, word [ebp + CLIENT_EBX]
     mov [net_dma_seg], eax
+    ; Reject overlapping stub/DMA blocks, even if a nonstandard caller supplied them.
+    movzx edx,word [ebp+CLIENT_ECX]
+    lea ecx,[eax+1024]
+    cmp edx,ecx
+    jae .blocks_ok
+    lea ecx,[edx+32]
+    cmp eax,ecx
+    jb .nic_fail
+.blocks_ok:
     movzx eax, word [ebp + CLIENT_ECX]
     mov [net_stub_seg], eax
     cmp dword [irq_hooked], 0
@@ -178,6 +227,7 @@ _v86_net_init_call:
     mov word [ebp + CLIENT_EAX], 5 ; retain DMA until reboot
     ret
 .nic_fail:
+    mov dword [net_old_vec60_saved],0
     mov word [ebp + CLIENT_EAX], 3
     ret
 .nic_up:
@@ -204,15 +254,22 @@ _v86_net_note_oldvec:
 
  dd _pkt_oldvec
 _pkt_hookproc:
+ pushfd
+ cli
+ cld
  pushad
  push ebp
  call gate1_net_api
  add esp,4
  popad
+ popfd
  clc
  ret
  dd irq_oldvec
 irq_hook:
+ pushfd
+ cli
+ cld
  pushad
  call gate1_net_service
  test eax,eax
@@ -225,18 +282,24 @@ irq_hook:
 .master:
  out 0x20,al
  popad
+ popfd
  clc
  ret
 .chain:
  popad
+ popfd
  stc
  ret
  dd timer_oldvec
 timer_hook:
+ pushfd
+ cli
+ cld
  pushad
  call eth_poll
  call _net_drain_upcalls
  popad
+ popfd
  stc
  ret
 _net_drain_upcalls:
@@ -288,6 +351,8 @@ _net_drain_upcalls:
     VMMCall VMM_SIMULATE_FAR_CALL
     VMMCall VMM_RESUME_EXEC
     VMMCall VMM_END_NEST_EXEC
+    cli
+    cld
     cmp dword [net_upcall_buf + 4], 0
     jne .net_after
     mov eax, [ebp + CLIENT_ES]          ; phase 0 answer: offered buffer
@@ -317,7 +382,23 @@ _net_drain_upcalls:
 
 global DllMain
 DllMain:
- cmp dword [esp+8],1
+ mov eax,[esp+8]
+ pushfd
+ cli
+ push ebx
+ push esi
+ push edi
+ push ebp
+ cld
+ call dll_entry
+ pop ebp
+ pop edi
+ pop esi
+ pop ebx
+ popfd
+ ret 12
+dll_entry:
+ cmp eax,1
  jne .detach
  push edi
  xor edi,edi
@@ -369,7 +450,7 @@ DllMain:
  mov dword [timer_hooked],1
  pop edi
  mov eax,1
- ret 12
+ ret
 .unhook_bridge:
  mov eax,PKT_BRIDGE_VECTOR
  mov esi,_pkt_hookproc
@@ -394,9 +475,9 @@ DllMain:
  pop edi
 .fail:
  xor eax,eax
- ret 12
+ ret
 .detach:
- cmp dword [esp+8],0
+ cmp eax,0
  jne .ok
  cmp dword [net_in_upcall],0
  jne .fail
@@ -419,7 +500,10 @@ DllMain:
  shl eax,4
  test eax,eax
  jz .no_stub
- mov byte [eax],0xCF
+ ; MOV DH,11; PUSH BP; MOV BP,SP; OR word [BP+6],1; POP BP; IRET
+ mov dword [eax],0x89550BB6
+ mov dword [eax+4],0x064E83E5
+ mov dword [eax+8],0x90CF5D01
 .no_stub:
  cmp dword [irq_hooked],0
  je .no_irq
@@ -448,6 +532,8 @@ DllMain:
  call eth_release_resources
  test eax,eax
  jnz .fail
+ cmp dword [bridge_released],1
+ je .release_vector60
  push dword 0
  push dword PKT_BRIDGE_VECTOR
  push dword 5
@@ -455,6 +541,10 @@ DllMain:
  add esp,12
  test eax,eax
  jnz .fail
+ mov dword [bridge_released],1
+.release_vector60:
+ cmp dword [vector60_released],1
+ je .detach_unregister
  push dword 0
  push dword 0x60
  push dword 5
@@ -462,6 +552,8 @@ DllMain:
  add esp,12
  test eax,eax
  jnz .fail
+ mov dword [vector60_released],1
+.detach_unregister:
  push dword ETH_ID
  FRESCall 2
  add esp,4
@@ -469,4 +561,4 @@ DllMain:
  jnz .fail
 .ok:
  mov eax,1
- ret 12
+ ret

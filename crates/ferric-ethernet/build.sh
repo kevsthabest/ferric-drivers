@@ -10,7 +10,7 @@ mkdir -p "${OUT_DIR}"
 nasm -f bin -o out/pktstub.bin crates/gate1-svc/asm/pktstub.asm
 nasm -f bin -o out/ETHINIT.COM crates/ferric-ethernet/asm/ethinit.asm
 
-echo "[ferric-ethernet] 1/5 Building freestanding 32-bit Rust SD module (i386-unknown-none)..."
+echo "[ferric-ethernet] 1/5 Building freestanding 32-bit Rust Ethernet module (i386-unknown-none)..."
 cargo build --release -p ferric-ethernet --target targets/i386-unknown-none.json
 
 LIB_A="target/i386-unknown-none/release/libferric_ethernet.a"
@@ -27,7 +27,7 @@ python3 scripts/check_386_purity.py --require-code "${JLM_RUST_OBJ}"
 echo "[ferric-ethernet] 3/5 Converting ELF32->COFF and assembling eth_jlm.asm..."
 python3 crates/gate1-svc/elf32_to_coff.py "${JLM_RUST_OBJ}" "${JLM_RUST_COFF}"
 nasm -f win32 -o "${JLM_STUB_OBJ}" crates/ferric-ethernet/asm/eth_jlm.asm
-python3 scripts/check_asm_purity.py crates/ferric-ethernet/asm/eth_jlm.asm
+python3 scripts/check_asm_purity.py crates/ferric-ethernet/asm/eth_jlm.asm crates/ferric-ethernet/asm/ethinit.asm crates/gate1-svc/asm/pktstub.asm
 
 echo "[ferric-ethernet] 4/5 Linking relocatable PE32 JLM out/I8255X.DLL and PX-patching..."
 wlink format windows nt dll runtime native     file "${JLM_STUB_OBJ},${JLM_RUST_COFF}"     name "${JLM_DLL}"     option start=DllMain,quiet     export _ddb.1

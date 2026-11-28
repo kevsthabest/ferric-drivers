@@ -2,6 +2,13 @@
 #![cfg_attr(not(test), no_std)]
 #![deny(warnings)]
 use core::cell::UnsafeCell;
+
+// Mutated only under the assembly adapter's interrupt exclusion.
+struct Lifecycle(UnsafeCell<ShutdownState>);
+unsafe impl Sync for Lifecycle {}
+#[derive(Default)]
+struct ShutdownState { stopped: bool, io_released: bool, pci_released: bool }
+static LIFECYCLE: Lifecycle = Lifecycle(UnsafeCell::new(ShutdownState { stopped: false, io_released: false, pci_released: false }));
 use ferric_hw::pci::{read32 as pci_read32, write32 as pci_write32};
 
 #[cfg(not(test))]
@@ -165,12 +172,19 @@ pub extern "C" fn eth_poll() {
 /// Disable bus mastering and verify its readback before releasing DMA.
 #[unsafe(no_mangle)]
 pub extern "C" fn eth_shutdown() -> u32 {
+    let lifecycle = unsafe { &mut *LIFECYCLE.0.get() };
+    if lifecycle.stopped { return 0; }
     let st = net_state();
     if st.regs.iter().any(|r| r.active) || st.svc_rfd >= 0 { return 1; }
     st.present = false;
     st.ethernet.eth_ready = false;
-    if !st.ethernet.probed { return 0; }
+    if !st.ethernet.probed { lifecycle.stopped = true; return 0; }
     let e = &mut st.ethernet;
+    if e.dma_lin == 0 {
+        unsafe { pci_write32(0, e.pci_device, 0, 4, u32::from(e.original_command)) };
+        lifecycle.stopped = true;
+        return 0;
+    }
     unsafe {
         outb(e.io_base + SCB_CMDHI, 1);
         outl(e.io_base + SCB_PORT, 0);
@@ -191,17 +205,51 @@ pub extern "C" fn eth_shutdown() -> u32 {
         // Do not restore original bus mastering without restoring firmware DMA state.
         pci_write32(0, e.pci_device, 0, 4, u32::from(e.original_command & !4));
     }
+    lifecycle.stopped = true;
     // Resource release is separate, after the assembly adapter removes hooks.
     0
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn eth_release_resources() -> u32 {
+    let lifecycle = unsafe { &mut *LIFECYCLE.0.get() };
+    if !lifecycle.stopped { return 1; }
     let e = &net_state().ethernet;
     if e.probed {
-        if unsafe { eth_release(2, u32::from(e.io_base), 64) } != 0 { return 1; }
-        if unsafe { eth_release(1, u32::from(e.pci_device) << 3, 0) } != 0 { return 1; }
+        if !lifecycle.io_released {
+            if unsafe { eth_release(2, u32::from(e.io_base), 64) } != 0 { return 1; }
+            lifecycle.io_released = true;
+        }
+        if !lifecycle.pci_released {
+            if unsafe { eth_release(1, u32::from(e.pci_device) << 3, 0) } != 0 { return 1; }
+            lifecycle.pci_released = true;
+        }
     }
     net_reset();
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn conventional_memory_buffers_are_bounded() {
+        assert_eq!(v86_buffer(0x2000, 0x10, 60), Some(0x20010));
+        assert_eq!(v86_buffer(0, 0, 1), None);
+        assert_eq!(v86_buffer(0xFFFF, 0xF, 2), None);
+        assert_eq!(v86_buffer(0x2000, 0xFFFF, 2), None);
+        assert_eq!(v86_buffer(0x2000, 0, 0), None);
+    }
+    #[test]
+    fn unload_pins_active_receivers_and_retries_cleanly() {
+        net_reset();
+        let st = net_state();
+        st.regs[0].active = true;
+        assert_eq!(eth_shutdown(), 1);
+        net_state().regs[0].active = false;
+        assert_eq!(eth_shutdown(), 0);
+        assert_eq!(eth_shutdown(), 0);
+        assert_eq!(eth_release_resources(), 0);
+        assert_eq!(eth_release_resources(), 0);
+    }
 }

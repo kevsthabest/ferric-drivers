@@ -20,12 +20,17 @@
 ; owned by this PSP. Status: 0 installed, 1 no NIC, 2 alloc failed,
 ; 3 bring-up failed, 4 already installed, 9 no JLM.
 
+cpu 386
 bits 16
 org 0x100
 
 NET_DMA_PARAS equ 1024          ; 16 KiB; must match the Rust layout
 
 start:
+    ; Relocate SP inside the retained COM block before shrinking it.
+    mov sp, private_stack_top
+    push cs
+    pop es
     ; Shrink our own block before allocating anything: DOS hands a
     ; .COM the largest free block, so without this the AH=48h calls
     ; below have no arena left to take from. (G1LIVE does the same;
@@ -34,6 +39,7 @@ start:
     mov bx, (netinit_end - $$ + 0x100 + 15) / 16
     mov ah, 0x4A
     int 0x21
+    jc .shrink_failed
 
     xor di, di
     mov es, di
@@ -48,6 +54,9 @@ start:
     mov word [status], 9
     jmp .report
 
+.shrink_failed:
+    mov word [status],2
+    jmp .report
 .have_jlm:
     mov ax, 0x0003
     call far [entry_off]
@@ -65,6 +74,8 @@ start:
 .alloc_dma:
     mov ax,0x3560
     int 0x21
+    cmp bx,0xFFF4
+    ja .allocate
     cmp dword [es:bx+3],0x20544B50
     jne .allocate
     cmp dword [es:bx+7],0x52565244
@@ -81,6 +92,10 @@ start:
 .dma_ok:
     mov [dma_seg], ax
     mov bx, [api_cx]
+    cmp bx, 0
+    je .copy_failed
+    cmp bx, 32
+    ja .copy_failed
     mov ah, 0x48
     int 0x21
     jnc .stub_ok
@@ -95,6 +110,8 @@ start:
     mov es, ax
     xor di, di
     mov ax, 0x0005
+    mov cx, [api_cx]
+    shl cx, 4
     call far [entry_off]
     test ax,ax
     jz .copy_failed
@@ -237,4 +254,7 @@ msg_crlf:   db 0x0D, 0x0A, '$'
 
 
 
+align 2
+    times 512 db 0
+private_stack_top:
 netinit_end:
