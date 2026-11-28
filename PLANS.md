@@ -13,7 +13,7 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 |---|---|---|
 | I.0 | Roadmap, safety fixes, independent build/test entry point | Implemented; qualification ongoing |
 | I.1 | Shared no_std PCI/MMIO/IRQ/DMA/time and device ownership interfaces | Active |
-| I.2 | Independent Intel 8255x module and packet facade | Experimental implementation; runtime qualification |
+| I.2 | Independent Intel 8255x module and packet facade | QEMU qualified; physical qualification pending |
 | I.3 | CardBus provider and Atheros module | Design / initial extraction |
 | I.4 | PS/2 and USB mouse service with INT 33h ownership | Planned |
 | I.5 | OHCI and EHCI providers, common USB enumeration/storage/HID | Planned |
@@ -77,8 +77,11 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: FRES resource kinds 6/7 added for MMIO intervals and secondary bus ownership; CardBus pure layout validation covers alignment, inclusive bridge limits and occupied resource conflicts. Hardware discovery and transactional claim/rollback remain pending.
 
+- CI checkpoint `47c2324`: all host tests and eight target builds passed; independent Ethernet QEMU positive and negative cases passed (two installs and ARP exchanges, unload/reinstall, missing broker and NIC). Physical acceptance remains pending.
+- I.3: transactional four-resource lease with reverse-order rollback and consumer pinning; mock tests cover every partial acquisition and failed release retry.
+
 ## Immediate backlog
-- Ethernet: rerun QEMU smoke after archive selection fix; verify real packet exchange and lifecycle before release.
+- Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.
 - SD: run regression tests for BAR mapping, partial initialization and CMD16 failure; validate inserted-card reads, removal and mapping/resource release.
 - PMU: distinguish verified throttling from unverified battery/backlight; validate register access against hardware evidence.

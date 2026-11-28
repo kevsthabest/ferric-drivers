@@ -45,7 +45,7 @@ independently loadable modules. Each driver set has its own section under
 | [Power Management](docs/drivers/pmu.md) | `PMU.JLM` (`0xFD05`) | Standalone ALi M7101 PMU driver: Smart Battery telemetry (SMBus), CPU clock throttling (`P_CNTRL`), and LCD CCFT backlight PWM (`PWRCTL.COM`) |
 | [Toshiba SD Slot](docs/drivers/sd.md) | `TOSHSD.JLM` (`0xFD06`) | Standalone read-only Toshiba TC6371AF (`1179:0805` / `1179:0803`) built-in SD card slot driver (`SDPROBE.COM`) |
 
-Standalone Ethernet requires FRES.JLM, then I8255X.JLM and ETHINIT.COM. The development branch has passed host tests and eight target builds; the emulator gate is not yet passing. See [qualification](docs/qualification.md) and [CI artifacts](https://github.com/kevsthabest/ferric-drivers/actions).
+Standalone Ethernet requires FRES.JLM, then I8255X.JLM and ETHINIT.COM. The development branch has passed host tests and eight target builds; the Ethernet emulator gate passed at 47c2324. See [qualification](docs/qualification.md) and [CI artifacts](https://github.com/kevsthabest/ferric-drivers/actions).
 
 Hardware evidence — what was proven on the development machine, and
 the limits that come with it — is in
@@ -57,7 +57,7 @@ These are drivers for **specific chips**, developed and proven on one
 machine (a Toshiba DynaBook SS 2000M, Pentium III-M). They are not
 drop-in drivers for arbitrary FreeDOS + Jemm machines:
 
-- **Ethernet** supports the **Intel 8255x** IDs `8086:1229` (legacy physical evidence) and `8086:1209` (QEMU target). Standalone runtime qualification is pending.
+- **Ethernet** supports the **Intel 8255x** IDs `8086:1229` (legacy physical evidence) and `8086:1209` (QEMU target). Standalone QEMU qualification passed; physical qualification pending.
 - **Wi-Fi** supports the **Toshiba ToPIC95-family CardBus bridge**
   (`1179:0617`) with an **Atheros AR2413** card (developed against the
   D-Link DWL-G630 Rev C2, `168C:001A`), 2.4 GHz, **WPA2-PSK only**.

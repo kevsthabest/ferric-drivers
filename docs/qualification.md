@@ -58,3 +58,5 @@ only; lack of an emulated device is recorded, not counted as a pass.
 ## Evidence checkpoint
 
 2026-11-27, branch revision `96f519d`: [CI run 46086383312](https://github.com/kevsthabest/ferric-drivers/actions/runs/46086383312) passed host and target build steps; QEMU did not boot due to ambiguous upstream boot.asm archive entry. No runtime pass claimed. [Experimental build artifacts](https://github.com/kevsthabest/ferric-drivers/actions/runs/46086383312/artifacts/15238968623).
+
+2026-11-27, `47c2324`: [CI 46087047148](https://github.com/kevsthabest/ferric-drivers/actions/runs/46087047148) passed host tests, all target builds and both independent Ethernet QEMU scenarios. Two ETHINIT status=0 and NTEST PASS results, removal and reinstall, missing broker status=9 and absent NIC status=1. Physical qualification remains pending.

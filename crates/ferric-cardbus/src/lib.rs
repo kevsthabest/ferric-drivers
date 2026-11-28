@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 pub mod resources;
+pub mod lifecycle;
 
 pub const TOPIC95_VID: u16 = 0x1179;
 pub const TOPIC95_DID: u16 = 0x0617;
