@@ -45,3 +45,7 @@ Shared `connection::connect` coordinates bounded open-system authentication, WPA
 ## Packet boundary
 
 Shared packet conversion/classification now serves integrated TX/RX classification and the future standalone data path. Protected TX refuses zero or exhausted 48-bit CCMP packet numbers rather than wrapping. The standalone receive helper validates AP/destination/DS direction, strips FCS and hardware-verified CCMP MIC, separates EAPOL from DOS payloads and pads short Ethernet frames. It requires the transport to verify descriptor success and decryption. DOS INT 60h installation, receiver callbacks and rekey handling are still pending; no standalone packet vector is installed.
+
+## Integration status
+
+The resident probe checkpoint 44ac8d5 passed CI. The subsequent DMA, scan, WPA2 and packet-boundary work is experimental; aggregate CI must pass before physical use. CardBus independently refuses activation and DMA mastering until authorization and qualification. No DOS packet stub is installed by ATH5K.JLM. Existing integrated runtime remains separate for now.

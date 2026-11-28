@@ -91,7 +91,9 @@ pub extern "C" fn cb_dma_master(slot:u32,consumer:u32,enable:u32)->u32{
     if slot>=2||consumer!=0xfd0a||enable>1{return 1;}
     let Some(a)=slots()[slot as usize].as_mut()else{return 5;};
     if !a.session.consumer_is(consumer as u16){return 4;}
-    if a.hw.set_dma_master(enable!=0){0}else{2}
+    // Separate gate: no bus mastering until physical drain is qualified.
+    if enable!=0{return 6;}
+    if a.hw.set_dma_master(false){0}else{2}
 }
 struct AuditPci;
 impl ferric_cardbus::audit::PciRead for AuditPci {
@@ -109,6 +111,10 @@ pub extern "C" fn cb_audit(slot:u32)->u32{
 pub extern "C" fn cb_start_audited(slot:u32)->u32 {
     if slot>=2{return 1;}
     if cb_audit(slot)!=0{return 5;}
+    // Read-only PCI audit does not authorize any physical address range.
+    // This gate must not be bypassed by a future V86 wrapper.
+    const FIRMWARE_AUTHORIZED:bool=false;
+    if !FIRMWARE_AUTHORIZED{return 6;}
     // A PCI-only scan is insufficient; platform firmware authorization remains absent.
     let cell=&mut slots()[slot as usize];if cell.is_some(){return 2;}
     let info=discover(slot,|f,o|unsafe{read32(0,TOPIC95_PCI_DEV,f,o)});

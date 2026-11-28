@@ -40,6 +40,19 @@ pub fn inspect(io:&mut impl PciRead,slot:u8,r:SlotResources)->Audit {
                     let buses=io.read(b,d,f,0x18);
                     let first=(buses>>8) as u8;let last=(buses>>16) as u8;
                     if first!=0 && first<=r.sec_bus && r.sec_bus<=last{return Audit::BusConflict;}
+                    // Prefetchable memory windows can conflict even when no BAR
+                    // begins inside the proposed aperture. Refuse unknown 64-bit
+                    // window encodings rather than silently ignoring them.
+                    if header==1{
+                        let w=io.read(b,d,f,0x24);
+                        let base=(w&0xfff0)<<16;let limit=(w&0xfff00000)|0xfffff;
+                        let is64=w&0x00010001!=0;
+                        if is64&&(io.read(b,d,f,0x28)!=0||io.read(b,d,f,0x2c)!=0){return Audit::UnknownHeader;}
+                        if base!=0&&limit>=base{
+                            let len=u64::from(limit)-u64::from(base)+1;
+                            if len>u64::from(u32::MAX)||ranges.iter().any(|a|a.overlaps(Range{base,len:len as u32})){return Audit::BarConflict;}
+                        }
+                    }
                     // CardBus windows encode 4 KiB pages, PCI bridges 1 MiB.
                     if header==2 {
                         for o in [0x1c,0x24] {

@@ -114,3 +114,10 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 - Validate temporary standalone PMU/SD exclusion in both load orders; replace whole-module exclusion with per-device ownership in I.1.
 - Execute remaining standalone runtime and physical acceptance matrix. Existing purity checks are not runtime qualification.
 - Investigate PCI allocator and calibrated timing before broad hardware claims.
+
+### I.3 integration checkpoint
+
+- Resident MAC probe: CI green at 44ac8d5.
+- DMA adapter, passive scanner, WPA2 LinkIo orchestration and packet conversion: implemented, combined CI pending.
+- CardBus explicit authorization and DMA gates: closed; verify real firmware apertures and PCI drain before any activation.
+- Remaining: resident LinkIo transport, entropy/rekey, DOS packet hooks and retained DOS allocation, physical qualification. No parent OS changes.

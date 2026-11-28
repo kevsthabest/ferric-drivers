@@ -62,6 +62,11 @@ impl Snapshot {
         io.write(0x90, self.values[13] | 1);
         let pin = if self.values[14] & 0x2000 != 0 { 0x2000 } else { 0x1000 };
         io.write(0xa0, (self.values[14] & !0x3000) | pin | 0x800001c0);
+        // Disable optional posted-write forwarding for the experimental DMA path.
+        let bridge=io.read(0x3c);
+        if bridge==u32::MAX{return Err(Error::Readback);}
+        io.write(0x3c,bridge&!(u32::from(crate::CB_BRIDGE_POSTEN)<<16));
+        if io.read(0x3c)&(u32::from(crate::CB_BRIDGE_POSTEN)<<16)!=0{return Err(Error::Readback);}
         if io.read(0x10) & !0xfff != r.bar0_phys ||
             io.read(0x18) & 0x00ff_ffff != u32::from(r.sec_bus) * 0x10100 ||
             io.read(0x1c) & !0xfff != r.mem0_base ||
