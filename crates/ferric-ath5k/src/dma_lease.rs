@@ -38,6 +38,9 @@ impl Lease{
             return if self.shutdown(io).is_ok(){Err(Error::Invalid)}else{Err(Error::Cleanup)};
         };
         self.region=Some(region);
+        // Initialization may reset PCI configuration or partially start an engine.
+        // Treat failure as potentially active until stop and isolation are verified.
+        self.state=State::PossiblyActive;
         if !io.initialize(region){
             return if self.shutdown(io).is_ok(){Err(Error::Initialize)}else{Err(Error::Cleanup)};
         }
@@ -64,18 +67,25 @@ impl Lease{
 #[cfg(test)]
 mod tests{
     use super::*;
-    struct Mock{lock:bool,master:bool,fail_enable:bool,fail_stop:bool,fail_isolate:bool,fail_unlock:bool,initialized:bool}
+    struct Mock{lock:bool,master:bool,fail_enable:bool,fail_stop:bool,fail_isolate:bool,fail_unlock:bool,initialized:bool,fail_initialize:bool}
     impl DmaPlatform for Mock{
         fn lock(&mut self,_:u32,_:u32)->Option<u32>{assert!(!self.master);self.lock=true;Some(0x40000)}
         fn unlock(&mut self,_:u32,_:u32)->bool{assert!(!self.master);if self.fail_unlock{return false;}self.lock=false;true}
-        fn initialize(&mut self,_:Region)->bool{assert!(self.lock&&!self.master);self.initialized=true;true}
+        fn initialize(&mut self,_:Region)->bool{assert!(self.lock&&!self.master);self.initialized=true;!self.fail_initialize}
         fn enable_master(&mut self)->bool{assert!(self.initialized&&self.lock);self.master=true;!self.fail_enable}
         fn stop_engines(&mut self)->bool{!self.fail_stop}
         fn isolate(&mut self)->bool{if self.fail_isolate{return false;}self.master=false;true}
     }
-    fn mock()->Mock{Mock{lock:false,master:false,fail_enable:false,fail_stop:false,fail_isolate:false,fail_unlock:false,initialized:false}}
+    fn mock()->Mock{Mock{lock:false,master:false,fail_enable:false,fail_stop:false,fail_isolate:false,fail_unlock:false,initialized:false,fail_initialize:false}}
     #[test]fn normal_and_duplicate_start(){let mut m=mock();let mut l=Lease::new();assert!(l.start(&mut m,0x20000).is_ok());assert_eq!(l.start(&mut m,0x30000),Err(Error::Busy));assert!(!l.can_unload());l.shutdown(&mut m).unwrap();assert!(l.can_unload()&&!m.lock);}
     #[test]fn failed_stop_and_isolation_keep_lock(){let mut m=mock();let mut l=Lease::new();l.start(&mut m,0x20000).unwrap();m.fail_stop=true;assert_eq!(l.shutdown(&mut m),Err(Error::Cleanup));assert!(m.lock&&!l.can_unload());m.fail_stop=false;m.fail_isolate=true;assert!(l.shutdown(&mut m).is_err());assert!(m.lock);m.fail_isolate=false;l.shutdown(&mut m).unwrap();}
     #[test]fn uncertain_enable_and_unlock_retry(){let mut m=mock();m.fail_enable=true;m.fail_unlock=true;let mut l=Lease::new();assert_eq!(l.start(&mut m,0x20000),Err(Error::Cleanup));assert_eq!(l.state(),State::Isolated);assert!(m.lock&&!m.master);m.fail_unlock=false;l.shutdown(&mut m).unwrap();assert!(l.can_unload());}
+    #[test]fn uncertain_initialization_retains_lock(){
+        let mut m=mock();let mut l=Lease::new();
+        m.fail_initialize=true;m.fail_stop=true;
+        assert_eq!(l.start(&mut m,0x20000),Err(Error::Cleanup));
+        assert!(m.lock&&!l.can_unload());m.fail_stop=false;
+        l.shutdown(&mut m).unwrap();assert!(!m.lock);
+    }
     #[test]fn invalid_dos_range(){let mut m=mock();let mut l=Lease::new();assert_eq!(l.start(&mut m,0xff000),Err(Error::Invalid));assert!(!m.lock);}
 }

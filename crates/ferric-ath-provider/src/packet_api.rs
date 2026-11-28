@@ -2,7 +2,7 @@
 //! All calls serialized by the Jemm bridge; callbacks run outside Rust.
 use core::cell::UnsafeCell;
 use crate::{ath_send_internal,ath_receive_internal,state};
-const EDI:usize=0;const ESI:usize=1;const EBX:usize=4;const EDX:usize=5;const ECX:usize=6;const EAX:usize=7;const CS:usize=10;const FLAGS:usize=12;const ES:usize=15;const DS:usize=16;
+const EDI:usize=0;const ESI:usize=1;const EBX:usize=4;const EDX:usize=5;const ECX:usize=6;const EAX:usize=7;const FLAGS:usize=12;const ES:usize=15;const DS:usize=16;
 #[derive(Clone,Copy)]
 struct Registration{active:bool,filter:Option<u16>,receiver:u32}
 const EMPTY:Registration=Registration{active:false,filter:None,receiver:0};
@@ -10,6 +10,10 @@ struct Packet{regs:[Registration;4],mode:u16,frame:[u8;1600],phase:u8,handle:usi
 impl Packet{const fn new()->Self{Self{regs:[EMPTY;4],mode:3,frame:[0;1600],phase:0,handle:0,len:0,dest:0,stats:[0;7]}}}
 struct Cell(UnsafeCell<Packet>);unsafe impl Sync for Cell{}
 static PACKET:Cell=Cell(UnsafeCell::new(Packet::new()));
+#[cfg(not(test))]
+unsafe extern "C"{fn ath_packet_stub_segment()->u32;}
+#[cfg(test)]
+unsafe fn ath_packet_stub_segment()->u32{0}
 fn packet()->&'static mut Packet{unsafe{&mut *PACKET.0.get()}}
 fn linear(seg:u32,off:u32,len:usize)->Option<u32>{
     let o=off&0xffff;let l=((seg&0xffff)<<4)+o;
@@ -18,6 +22,8 @@ fn linear(seg:u32,off:u32,len:usize)->Option<u32>{
     if let Some(r)=state().dma.region(){
         if l<r.linear+16384&&r.linear<l+len as u32{return None;}
     }
+    let stub=unsafe{ath_packet_stub_segment()}<<4;
+    if stub!=0&&l<stub+512&&stub<l+len as u32{return None;}
     Some(l)
 }
 fn word(c:&mut [u32;19],i:usize,v:u32){c[i]=(c[i]&0xffff0000)|(v&0xffff);}
@@ -36,7 +42,7 @@ pub unsafe extern "C" fn ath_packet_api(client:*mut u32)->u32{
     // Permit release even after link loss so the driver can unload.
     if state().link.is_none()&&func!=3{error(c,11);return 1;}
     match func{
-        1 if al==255=>{c[EAX]=(c[EAX]&!255)|2;word(c,EBX,0x101);word(c,ECX,0x100);word(c,EDX,1);let cs=c[CS];word(c,DS,cs);word(c,ESI,0x20);}
+        1 if al==255=>{c[EAX]=(c[EAX]&!255)|2;word(c,EBX,0x101);word(c,ECX,0x100);word(c,EDX,1);let stub=unsafe{ath_packet_stub_segment()};word(c,DS,stub);word(c,ESI,0x20);}
         2=>{
             if al!=1{error(c,2);return 1;}
             if c[EDX]&255!=0{error(c,4);return 1;}

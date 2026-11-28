@@ -68,6 +68,10 @@ _ddb:
  dd services,1
  dd 0,0,80,0,0,0
 section .text align=4
+global ath_packet_stub_segment
+ath_packet_stub_segment:
+ mov eax,[stub_segment]
+ ret
 global ath_map
 ath_map:
     push ebx
@@ -234,6 +238,8 @@ dispatch:
  mov word [ebp+CLIENT_ECX],(stub_end-stub_start+15)/16
  jmp .done
 .stub_copy:
+ cmp dword [stub_segment],0
+ jne .bad
  movzx eax,word [ebp+CLIENT_ES]
  cmp eax,0x50
  jb .bad

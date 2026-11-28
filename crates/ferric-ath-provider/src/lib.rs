@@ -81,7 +81,7 @@ pub extern "C" fn ath_dma_start(seg:u32)->u32{
     let s=state();
     let Some(slot)=s.slot else{return 5;};
     if s.link.is_some()||!s.dma.can_unload(){return 2;}
-    if s.info.stage!=4||s.info.mac_ok==0||!dos::valid_dma_segment(seg){return 1;}
+    if s.linear==0||s.info.stage!=4||s.info.mac_ok==0||!dos::valid_dma_segment(seg){return 1;}
     let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
     match s.dma.start(&mut io,seg<<4){Ok(_)=>0,Err(_)=>if s.dma.can_unload(){9}else{7}}
 }
@@ -162,12 +162,15 @@ pub extern "C" fn ath_shutdown()->u32{
     if packet_api::ath_packet_busy()!=0{return 2;}
     // Disable application data before attempting shutdown, even on failure.
     s.link=None;
+    // A partially completed shutdown must never permit another DMA start.
+    s.info.stage=0;
     if !s.dma.can_unload(){
         let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
         if s.dma.shutdown(&mut io).is_err(){return 7;}
     }
     if unsafe{ath_cb_master(slot,0)}!=0{return 7;}
     if s.linear!=0{
+        ferric_ath5k::transport::ar2413_clear_keycache(&mut registers::Mmio(s.linear));
         if unsafe{ath_unmap(s.linear)}==0{return 7;}
         s.linear=0;
     }
