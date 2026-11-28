@@ -57,8 +57,6 @@ const AR5K_RESET_CTL_PCI: u32 = 0x0000_0010;
 
 
 const AR5K_INTPEND: usize = 0x4008;
-const AR5K_PCICFG: usize = 0x4010;
-const AR5K_PCICFG_RETRY_FIX: u32 = 0x0000_1000;
 
 const AR5K_SREV: usize = 0x4020;
 
@@ -109,7 +107,6 @@ pub const AR5K_KEYTABLE_TYPE_CCM: u32 = 0x0000_0006;
 const AR5K_KEYTABLE_TYPE_CLR: u32 = 0x0000_0007;
 pub const AR5K_KEYTABLE_VALID: u32 = 0x0000_8000;
 
-const AR5K_PHY_CHIP_ID: usize = 0x9818;
 const AR5K_PHY_RF_CTL3: usize = 0x9828;
 const AR5K_PHY_RF_CTL4: usize = 0x9834;
 const AR5K_PHY_SETTLING: usize = 0x9844;
@@ -162,13 +159,9 @@ pub const AR5K_SREV_AR5213A: u32 = 0x59;
 pub const AR5K_SREV_AR2413: u32 = 0x78;
 
 // Verified EEPROM word offsets (vendor/ref/linux-ath/ath5k/eeprom.h).
-const AR5K_EEPROM_MAGIC: u32 = 0x003D;
 pub const AR5K_EEPROM_MAGIC_VALUE: u16 = 0x5AA5;
-const AR5K_EEPROM_REG_DOMAIN: u32 = 0x00BF;
-const AR5K_EEPROM_VERSION: u32 = 0x00C1;
 
 const AR5K_EEPROM_HDR: u32 = 0x00C2;
-const AR5K_EEPROM_MISC5: u32 = 0x00C9;
 
 
 /// Determine hardware AES-CCM support per Linux `ath5k/attach.c:315-318`.
@@ -180,57 +173,7 @@ pub use ferric_ath5k::decode_eeprom_mac;
 
 /// Fixed 44-byte `#[repr(C)]` AR2413 probe summary returned to `WIFIPROBE.COM`
 /// via JLM V86 API `AX=0x000A`.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct WifiProbeInfo {
-    pub present: u8,
-    pub stage: u8,
-    pub slot: u8,
-    pub aes_hw: u8,
-    pub pci_vid: u16,
-    pub pci_did: u16,
-    pub bar0_phys: u32,
-    pub bar0_lin: u32,
-    pub srev: u32,
-    pub phy_id: u32,
-    pub ee_magic: u16,
-    pub ee_version: u16,
-    pub ee_hdr: u16,
-    pub ee_misc5: u16,
-    pub ee_regdom: u16,
-    pub mac_ok: u8,
-    pub reserved: u8,
-    pub mac: [u8; 6],
-    pub pad: [u8; 2],
-}
-
-impl WifiProbeInfo {
-    pub const ZERO: Self = Self {
-        present: 0,
-        stage: 0,
-        slot: 0,
-        aes_hw: 0,
-        pci_vid: 0,
-        pci_did: 0,
-        bar0_phys: 0,
-        bar0_lin: 0,
-        srev: 0,
-        phy_id: 0,
-        ee_magic: 0,
-        ee_version: 0,
-        ee_hdr: 0,
-        ee_misc5: 0,
-        ee_regdom: 0,
-        mac_ok: 0,
-        reserved: 0,
-        mac: [0; 6],
-        pad: [0; 2],
-    };
-}
-
-const _: () = {
-    assert!(core::mem::size_of::<WifiProbeInfo>() == 44);
-};
+pub use ferric_ath5k::probe::WifiProbeInfo;
 
 struct Ath5kState {
     mapped_phys: u32,
@@ -478,74 +421,7 @@ fn probe_internal() -> WifiProbeInfo {
     st.self_healed = 0;
 
     let srev = unsafe { srev_heal_once(slot, bar0_lin, srev) };
-    info.srev = srev;
-    if srev == 0xFFFF_FFFF || srev == 0 {
-        return info;
-    }
-
-    if !unsafe { wake_chip(bar0_lin) } {
-        return info;
-    }
-    if !unsafe {
-        nic_reset(
-            bar0_lin,
-            AR5K_RESET_CTL_PCU | AR5K_RESET_CTL_BASEBAND | AR5K_RESET_CTL_PCI,
-        )
-    } {
-        return info;
-    }
-    if !unsafe { wake_chip(bar0_lin) } {
-        return info;
-    }
-    if !unsafe { nic_reset(bar0_lin, 0) } {
-        return info;
-    }
-    if (srev & 0xFF) >= AR5K_SREV_AR5213A {
-        unsafe {
-            let pcfg = reg_r32(bar0_lin, AR5K_PCICFG);
-            reg_w32(bar0_lin, AR5K_PCICFG, pcfg | AR5K_PCICFG_RETRY_FIX);
-        }
-    }
-    info.phy_id = unsafe { reg_r32(bar0_lin, AR5K_PHY_CHIP_ID) };
-    info.stage = 3;
-
-    // Read EEPROM magic, version, header, misc5 (AES-disable), regdomain, and MAC.
-    let Some(magic) = (unsafe { eeprom_read(bar0_lin, AR5K_EEPROM_MAGIC) }) else {
-        return info;
-    };
-    let Some(ver) = (unsafe { eeprom_read(bar0_lin, AR5K_EEPROM_VERSION) }) else {
-        return info;
-    };
-    let Some(hdr) = (unsafe { eeprom_read(bar0_lin, AR5K_EEPROM_HDR) }) else {
-        return info;
-    };
-    let Some(misc5) = (unsafe { eeprom_read(bar0_lin, AR5K_EEPROM_MISC5) }) else {
-        return info;
-    };
-    let Some(regdom) = (unsafe { eeprom_read(bar0_lin, AR5K_EEPROM_REG_DOMAIN) }) else {
-        return info;
-    };
-    info.ee_magic = magic;
-    info.ee_version = ver;
-    info.ee_hdr = hdr;
-    info.ee_misc5 = misc5;
-    info.ee_regdom = regdom;
-    info.aes_hw = u8::from(decode_aes_support(srev, ver, misc5));
-
-    // Read MAC per ath5k_pci_eeprom_read_mac (prime 0x20, then 0x1F, 0x1E, 0x1D).
-    let _ = unsafe { eeprom_read(bar0_lin, 0x20) };
-    if let (Some(w1f), Some(w1e), Some(w1d)) = (
-        unsafe { eeprom_read(bar0_lin, 0x1F) },
-        unsafe { eeprom_read(bar0_lin, 0x1E) },
-        unsafe { eeprom_read(bar0_lin, 0x1D) },
-    ) {
-        if let Some(mac) = decode_eeprom_mac(w1f, w1e, w1d) {
-            info.mac = mac;
-            info.mac_ok = 1;
-        }
-    }
-
-    info.stage = 4;
+    ferric_ath5k::probe::probe_mapped(&mut LegacyRegisters(bar0_lin),&mut info,srev);
     info
 }
 

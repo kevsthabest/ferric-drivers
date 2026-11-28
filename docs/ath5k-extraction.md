@@ -25,3 +25,7 @@ The standalone-oriented DmaPlatform/Lease state machine requires isolation befor
 ## Resident module checkpoint
 
 Experimental ATH5K.JLM (FD0A) is now in the aggregate build. It checks FRES and CardBus ABI/service counts, rejects integrated FERRIC, registers its broker identity, queries and borrows only a powered AR2413, verifies mastering disabled, maps 64 KiB and retains ownership on cleanup failure. V86 AX=0A BX=slot requests a mapping-only probe; AX=0D releases it, status 0 success. CardBus discovery-only currently returns no eligible child, so this is not a working Wi-Fi driver. No DMA start, MAC probe, scan, connection or packet facade is exported yet. Provider services are rechecked at each call. CI pending.
+
+## Shared MAC probe
+
+CI fca637b passed. Both integrated and resident backends now use the shared 44-byte WifiProbeInfo and MAC/EEPROM probe sequence. The standalone provider reports AX=0A status 0 for completed probe or 8 for partial probe, and AX=0E ES:DI copies the diagnostic record (privileged linear address hidden). AX=0D releases mapping/consumer. Late PCI configuration recovery remains integrated-only; standalone reports partial probe rather than performing unqualified bridge rewrites. DMA remains disabled. Physical activation still gated.

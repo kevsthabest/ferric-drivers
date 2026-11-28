@@ -1,7 +1,7 @@
 ; Experimental standalone AR2413 consumer FD0A. No activation on load.
 cpu 386
 bits 32
-extern ath_version,ath_probe,ath_shutdown
+extern ath_version,ath_probe,ath_shutdown,ath_query
 %define VMM_PAGE_FREE 0x12
 %define VMM_PAGE_RESERVE 0x27
 %define VMM_PAGE_COMMIT_PHYS 0x2A
@@ -151,6 +151,8 @@ dispatch:
  je .probe
  cmp eax,0x0d
  je .stop
+ cmp eax,0x0e
+ je .query
  jmp .bad
 .ping:
  mov word [ebp+28],1
@@ -161,6 +163,22 @@ dispatch:
  movzx eax,word [ebp+16]
  push eax
  call ath_probe
+ add esp,4
+ mov [ebp+28],eax
+ jmp .done
+.query:
+ movzx eax,word [ebp+60]
+ shl eax,4
+ movzx edx,word [ebp]
+ cmp edx,0xffd4
+ ja .bad
+ add eax,edx
+ cmp eax,0x500
+ jb .bad
+ cmp eax,0xfffd4
+ ja .bad
+ push eax
+ call ath_query
  add esp,4
  mov [ebp+28],eax
  jmp .done
