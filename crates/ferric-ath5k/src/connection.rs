@@ -113,3 +113,18 @@ mod tests{
     #[test]fn no_ap_has_bounded_retries(){let mut m=Mock{tx:0,rx:0};assert!(matches!(connect(&mut m,[2,1,2,3,4,5],[2,6,7,8,9,10],b"test",b"password",[1;32]),Err(Error::Authentication)));assert_eq!((m.tx,m.rx),(3,120));}
     #[test]fn reject_invalid_credentials_before_tx(){let mut m=Mock{tx:0,rx:0};assert!(matches!(connect(&mut m,[2,1,2,3,4,5],[2,6,7,8,9,10],b"test",b"short",[1;32]),Err(Error::Invalid)));assert_eq!(m.tx,0);}
 }
+
+#[derive(Clone,Copy,Debug,Eq,PartialEq)]
+pub enum Rekey{Ignore,Reply(usize)}
+/// Verify and unwrap the group key using the existing handshake replay floor.
+/// Install only new keys; caller must terminate the session on send failure.
+pub fn group_rekey(c:&mut Connected,eapol:&[u8],reply:&mut [u8],mut install:impl FnMut(&[u8;16],u8)->bool)->Result<Rekey,Error>{
+    match c.handshake.process_eapol(eapol,reply){
+        HandshakeStep::Ignore=>Ok(Rekey::Ignore),
+        HandshakeStep::RotateGtk{gtk,gtk_idx,reply_len}=>{
+            if !(1..=3).contains(&gtk_idx)||reply_len>reply.len()||!install(&gtk,gtk_idx){return Err(Error::KeyInstall);}
+            Ok(Rekey::Reply(reply_len))
+        }
+        _=>Err(Error::Handshake)
+    }
+}

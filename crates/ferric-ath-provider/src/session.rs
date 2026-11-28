@@ -33,8 +33,23 @@ impl Link{
         let Some(n)=result?else{return Ok(None);};
         match ferric_ath5k::packet::receive_eth(out,&raw[..n],&self.sta,&self.ap,true){
             Some((ferric_ath5k::packet::RxEthAction::Deliver,n))=>Ok(Some(n)),
-            // Fail closed until the rekey path is connected; never deliver EAPOL.
-            Some((ferric_ath5k::packet::RxEthAction::Eapol,_))=>Err(Error::Handshake),
+            Some((ferric_ath5k::packet::RxEthAction::Eapol,n))=>{
+                let mut reply=[0u8;256];
+                let mut group=self.sta;group[0]|=1;
+                let step=connection::group_rekey(&mut self.connected,&out[14..n],&mut reply,|key,index|{
+                    transport::install_group_checked(io,index,key,&group)
+                })?;
+                if let connection::Rekey::Reply(n)=step{
+                    let mut eth=[0u8;270];eth[..6].copy_from_slice(&self.ap);
+                    eth[6..12].copy_from_slice(&self.sta);eth[12..14].copy_from_slice(&[0x88,0x8e]);
+                    eth[14..14+n].copy_from_slice(&reply[..n]);
+                    // Encrypt each retry with a fresh PN. Never reuse a nonce.
+                    let mut ack=false;
+                    for _ in 0..3{if self.send(io,region,&eth[..14+n]){ack=true;break;}}
+                    if !ack{return Err(Error::Transport);}
+                }
+                Ok(None)
+            },
             _=>Ok(None)
         }
     }

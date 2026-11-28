@@ -255,3 +255,10 @@ mod tests{
         assert!(t.transmit(&[1;60],0x1b));assert_eq!(m.tx_copy,1);assert_eq!(m.dma[(TX_DESC_OFF+4)/4],0x43800);
     }
 }
+
+pub fn install_group_checked(io:&mut impl RegisterIo,slot:u8,key:&[u8;16],mac:&[u8;6])->bool{
+    if !(1..=3).contains(&slot)||mac[0]&1==0||io.read(AR5K_SREV)==u32::MAX{return false;}
+    ar2413_install_ccmp_key(io,slot,key,Some(mac));
+    let w=encode_ccmp_key_words(key,Some(mac));let o=AR5K_KEYTABLE_0+usize::from(slot)*32;
+    io.read(o+20)==w[5]&&io.read(o+24)==w[6]&&io.read(o+28)==w[7]
+}

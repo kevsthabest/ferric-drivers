@@ -10,6 +10,7 @@ use ferric_ath5k::probe::{WifiProbeInfo,read_revision,probe_mapped};
 mod registers;
 mod dma_platform;
 mod session;
+mod nonce;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo)->!{loop{}}
@@ -34,10 +35,10 @@ unsafe fn ath_cb_master(_:u32,_:u32)->u32{5}
 unsafe fn ath_map(_:u32,_:u32)->u32{0}
 #[cfg(test)]
 unsafe fn ath_unmap(_:u32)->u32{0}
-struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo,scan:WifiScanResult,link:Option<session::Link>}
+struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo,scan:WifiScanResult,link:Option<session::Link>,nonce:nonce::Guard}
 struct Cell(UnsafeCell<Resident>);
 unsafe impl Sync for Cell{}
-static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO,scan:WifiScanResult::ZERO,link:None}));
+static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO,scan:WifiScanResult::ZERO,link:None,nonce:nonce::Guard::new()}));
 fn state()->&'static mut Resident{unsafe{&mut *STATE.0.get()}}
 fn eligible(info:&CardBusSlotInfo)->bool{
     info.present!=0&&info.stage==5&&info.card_present!=0&&info.is_cardbus!=0&&info.powered_3v3!=0&&
@@ -107,6 +108,7 @@ pub unsafe extern "C" fn ath_connect_internal(seg:u32,req:*mut ferric_ath5k::con
     let sn=unsafe{core::ptr::read_unaligned(nonce)};
     if !session::valid(&r,&sn){return 1;}
     if state().info.aes_hw==0{return 5;}
+    if !state().nonce.accept(sn){return 1;}
     let status=ath_dma_start(seg);if status!=0{return status;}
     let s=state();
     let (Some(slot),Some(region))=(s.slot,s.dma.region())else{return 7;};

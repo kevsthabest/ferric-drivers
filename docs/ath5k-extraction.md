@@ -57,3 +57,7 @@ Shared transport implements TX descriptor preparation, QCU idle check, bounded A
 ## Resident connection and data path
 
 Internal entry points now bind the shared connection engine and polled transport to resident DMA and station state. Explicit BSSID/channel and externally supplied fresh SNonce are required; no DOS entry exports credentials or activates hardware. TX uses software CCMP, RX uses the protected frame boundary. EAPOL currently invalidates the application session until group rekey is wired. Errors retain the DMA lease for shutdown. No claim of operational Wi-Fi or qualified randomness.
+
+## Group rekey and nonce contract
+
+Resident session now processes authenticated group-key rotations using the existing replay floor, verifies key cache metadata and sends encrypted group message 2 with a fresh CCMP PN on each retry. Failed key installation or ACK invalidates the session. The external nonce contract rejects zero/constant and immediate duplicate seeds; this is not an entropy source or a proof of uniqueness across reboot. A qualified external random source is still required. DMA and DOS connection remain gated.
