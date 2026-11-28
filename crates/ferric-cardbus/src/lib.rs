@@ -43,8 +43,9 @@ pub const CB_CVSTEST: u32 = 0x0000_4000;
 // CB_SOCKET_CONTROL values (Vcc=3.3V, Vpp=0V).
 pub const CB_SC_VCC_3V: u32 = 0x0000_0030;
 
-// DynaBook SS 2000M non-overlapping MMIO assignments (disjoint from
-// 0xF7EBF000 OHCI #1, 0xF7EFF000 82550, and 0xFC000000 Trident VGA).
+// DynaBook SS 2000M legacy candidate MMIO assignments, observed working
+// with the integrated driver. BAR base disjointness is not proof of
+// firmware ownership or complete aperture non-overlap.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SlotResources {
     pub sec_bus: u8,

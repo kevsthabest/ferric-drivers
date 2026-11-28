@@ -31,6 +31,8 @@ jobs:
           path: |
             out/*.JLM
             out/*.COM
+            out/WIFIGATE.BAT
+            docs/wireless-qualification.md
             out/ethernet-qemu/*.log
             out/ethernet-qemu/*.txt
           if-no-files-found: warn

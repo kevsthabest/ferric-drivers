@@ -22,6 +22,12 @@ pub fn inspect(io:&mut impl PciRead,slot:u8,r:SlotResources)->Audit {
        [0x1c,0x20,0x24,0x28,0x2c,0x30,0x34,0x38].iter().any(|&o|io.read(0,TOPIC95_PCI_DEV,slot,o)!=0) {
         return Audit::ActiveBridge;
     }
+    // Require the actual captured boot command/header/interrupt profile.
+    if io.read(0,TOPIC95_PCI_DEV,slot,4)&0xffff!=7 ||
+        (io.read(0,TOPIC95_PCI_DEV,slot,12)>>16)&0xff!=0x82 ||
+        io.read(0,TOPIC95_PCI_DEV,slot,0x3c)&0xffff != (u32::from(slot+1)<<8)|0xff {
+        return Audit::ActiveBridge;
+    }
     let bus=io.read(0,TOPIC95_PCI_DEV,slot,0x18);
     if bus&0x00ff_ffff != if slot==0{0x00030300}else{0x00040400} {return Audit::ActiveBridge;}
     // Scan bus 0 and the known graphics bus, respecting multifunction headers.
@@ -100,7 +106,7 @@ mod tests{
             if b!=0||f!=0{return u32::MAX;}
             match(d,o){
                 (0,0)=>0x164410b9,(1,0)=>0x524710b9,(17,0)=>0x06171179,(10,0)=>0x12298086,
-                (17,8)=>0x06070032,(17,12)=>0x00020000,(17,0x18)=>0x00030300,
+                (17,4)=>0x04900007,(17,8)=>0x06070032,(17,12)=>0x00820000,(17,0x3c)=>0x000001ff,(17,0x18)=>0x00030300,
                 (1,12)=>0x00010000,(1,0x18)=>self.bridge,(10,0x10)=>self.bar,
                 (_,0)=>u32::MAX,_=>0,
             }

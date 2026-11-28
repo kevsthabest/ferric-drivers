@@ -7,6 +7,7 @@ cd "${ROOT_DIR}"
 
 OUT_DIR="${ROOT_DIR}/out"
 mkdir -p "${OUT_DIR}"
+cp crates/ferric-ath-provider/asm/wifigate.bat out/WIFIGATE.BAT
 nasm -f bin -o out/athstub.bin crates/ferric-ath-provider/asm/athstub.asm
 nasm -f bin -o out/ATHDIAG.COM crates/ferric-ath-provider/asm/athdiag.asm
 nasm -f bin -o out/ATHINIT.COM crates/ferric-ath-provider/asm/athinit.asm
