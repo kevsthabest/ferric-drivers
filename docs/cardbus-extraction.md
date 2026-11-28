@@ -29,3 +29,7 @@ are essential. No changes to Ferric DOS main.
 ## Resource validation checkpoint
 
 FRES now recognizes physical MMIO interval and secondary-bus claims (kinds 6 and 7). The shared CardBus library validates proposed socket and bridge apertures, inclusive page limits, alignment, overlaps, bus collisions and IRQ bounds. This is pure validation only: discovering trustworthy occupied firmware ranges and wiring claims into a resident bridge remain prerequisites to hardware writes. No standalone power-up is enabled yet.
+
+## Resident discovery adapter
+
+CARDBUS.JLM (FD09) requires FRES. Its service table 0=version, 1=query(slot, destination), 2=acquire(slot, consumer), 3=release(slot, consumer). Query returns the 40-byte slot record; stage 1 means PCI identity/header verified, not powered. Acquire currently returns 5 (not enabled), release 4 (not owned). No PCI configuration writes, MMIO mapping or power transitions occur in this build. Existing CBINIT/CBPROBE clients remain integrated-core clients until updated. No Atheros consumer should treat this as an operational provider.

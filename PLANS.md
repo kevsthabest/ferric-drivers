@@ -84,6 +84,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - CI checkpoint `34ff59f` passed host/target and Ethernet QEMU gates. Added bounded CardBus socket power sequencing with voltage validation, reset ordering, removal/fault rollback, and explicit delay failure. Platform wiring pending.
 
+- I.3: experimental CARDBUS.JLM FD09 resident discovery adapter and versioned service table added. Activation deliberately refused until firmware resource audit and hardware lifecycle wiring are complete. CI pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

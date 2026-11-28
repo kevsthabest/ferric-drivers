@@ -11,6 +11,14 @@ name = "ferric-cardbus"
 version = "0.1.0"
 
 [[package]]
+name = "ferric-cb-provider"
+version = "0.1.0"
+dependencies = [
+ "ferric-cardbus",
+ "ferric-hw",
+]
+
+[[package]]
 name = "ferric-ehci"
 version = "0.1.0"
 

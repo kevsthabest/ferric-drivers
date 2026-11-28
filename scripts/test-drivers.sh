@@ -35,6 +35,9 @@ for crate in ferric-pmu ferric-sd ferric-res; do
     name="$(printf '%s' "$crate" | tr '-' '_')"
     test_crate "$name" "crates/$crate/src/lib.rs" --extern "ferric_hw=$tmp/libferric_hw.rlib"
 done
+test_crate ferric_cb_provider crates/ferric-cb-provider/src/lib.rs \
+    --extern "ferric_hw=$tmp/libferric_hw.rlib" \
+    --extern "ferric_cardbus=$tmp/libferric_cardbus.rlib"
 test_crate ferric_ethernet crates/ferric-ethernet/src/lib.rs \
     --cfg 'feature="ethernet-only"' \
     --extern "ferric_hw=$tmp/libferric_hw.rlib" \
