@@ -104,6 +104,8 @@ Status: ACTIVE (2026-11-27). Owner-approved direction: develop drivers here firs
 
 - I.3: shared AR2413 DMA geometry and RX ring descriptor generation. Fixed host/target CI discrepancy by exposing test-only constants from shared crate and importing only under cfg(test). Combined CI pending.
 
+- CI `989331f` passed. Shared bounded RX/TX stop and idle controls; legacy TX timeout preserves descriptor pointer on uncertain stop. DMA release/PCI isolation and standalone connection lifecycle remain pending.
+
 ## Immediate backlog
 - Ethernet: QEMU passed; qualify physical hardware before release.
 - I.3: isolate CardBus provider discovery, bridge windows and ownership before extracting the Atheros backend; preserve existing packet facade.

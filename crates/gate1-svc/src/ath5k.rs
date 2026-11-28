@@ -20,7 +20,6 @@ pub const AR2413_DID: u16 = 0x001A;
 // Verified ath5k MMIO register offsets (vendor/ref/linux-ath/ath5k/reg.h).
 const AR5K_CR: usize = 0x0008;
 const AR5K_CR_RXE: u32 = 0x0000_0004;
-const AR5K_CR_RXD: u32 = 0x0000_0020;
 const AR5K_RXDP: usize = 0x000C;
 
 const AR5K_IER: usize = 0x0024;
@@ -703,16 +702,8 @@ unsafe fn dma_r32(base: u32, off: usize) -> u32 {
 }
 
 
-unsafe fn stop_rx_dma(base: u32) {
-    unsafe {
-        reg_w32(base, AR5K_CR, AR5K_CR_RXD);
-        for _ in 0..50 {
-            if (reg_r32(base, AR5K_CR) & AR5K_CR_RXE) == 0 {
-                break;
-            }
-            cardbus::delay_ms(1);
-        }
-    }
+unsafe fn stop_rx_dma(base:u32) {
+    let _=ferric_ath5k::engine::stop_rx(&mut LegacyRegisters(base));
 }
 
 unsafe fn init_rx_ring(dma_lin:u32,dma_phys:u32) {
@@ -1159,15 +1150,7 @@ pub(crate) unsafe fn ar2413_tx_frame_polled(
 
     unsafe {
         // Ensure QCU 0 is idle before writing TXDP(0) (dma.c:424-425).
-        for _ in 0..10 {
-            if (reg_r32(base, AR5K_QCU_TXE) & 1) == 0 {
-                break;
-            }
-            cardbus::delay_ms(1);
-        }
-        if (reg_r32(base, AR5K_QCU_TXE) & 1) != 0 {
-            return false;
-        }
+        if ferric_ath5k::engine::wait_tx_idle(&mut LegacyRegisters(base)).is_err(){return false;}
 
         // Copy frame payload into physically contiguous TX DMA bounce buffer
         // and zero-fill the 8-byte CCMP MIC trailer space when encrypting.
@@ -1234,15 +1217,7 @@ pub(crate) unsafe fn ar2413_tx_frame_polled(
         // pre-check for the rest of the session. Disable the queue the way
         // ar2413_init_tx_q0 does and clear TXDP, so the next call re-points
         // TXDP at a fresh descriptor and starts from a known-idle queue.
-        reg_w32(base, AR5K_QCU_TXD, 1);
-        for _ in 0..20 {
-            if (reg_r32(base, AR5K_QCU_TXE) & 1) == 0 {
-                break;
-            }
-            cardbus::delay_ms(1);
-        }
-        reg_w32(base, AR5K_QCU_TXD, 0);
-        reg_w32(base, AR5K_QUEUE_TXDP_0, 0);
+        let _=ferric_ath5k::engine::stop_tx(&mut LegacyRegisters(base));
     }
     false
 }

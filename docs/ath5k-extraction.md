@@ -13,3 +13,7 @@ The radio module shares the register table upload, EEPROM checksum/calibration, 
 ## DMA ring geometry
 
 Shared 16 KiB layout, checked linear/physical region and RX descriptor generation replace legacy ring arithmetic. The integrated adapter retains its existing DMA locking and stop behavior; standalone DMA ownership and shutdown are not yet implemented. Test-only descriptor constants now import from the shared library to resolve host/target lint differences.
+
+## Engine control
+
+Shared bounded RX stop, TX idle wait and TX queue stop return explicit absent/timeout/timer errors. The integrated TX timeout recovery no longer clears TXDP or re-enables a queue if stop cannot be verified. Shared stop_all attempts both engines. This is not proof of PCI bus-master isolation: the legacy disconnect and scan paths still release DMA without checking all stop results. Standalone must retain the locked allocation until engine and PCI isolation are verified. CI checkpoint 989331f passed host, target and Ethernet QEMU.
