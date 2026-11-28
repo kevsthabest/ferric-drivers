@@ -30,7 +30,7 @@ pub trait LinkIo{
     fn set_aid(&mut self,aid:u16)->bool;
     fn install_keys(&mut self,tk:&[u8;16],gtk:&[u8;16],index:u8)->bool;
 }
-pub struct Connected{pub aid:u16,pub sequence:u16,pub handshake:Wpa2Handshake}
+pub struct Connected{pub aid:u16,pub sequence:u16,pub handshake:Wpa2Handshake,pub tk:[u8;16]}
 fn response(io:&mut impl LinkIo,buf:&mut [u8],sta:&[u8;6],ap:&[u8;6],auth:bool)->Result<Option<u16>,Error>{
     // Bound frame count as well as per-call timeout to tolerate a busy AP.
     for _ in 0..40{
@@ -95,7 +95,7 @@ pub fn connect(io:&mut impl LinkIo,sta:[u8;6],ap:[u8;6],ssid:&[u8],pass:&[u8],sn
         if !ack{return Err(Error::Transport);}
         if let HandshakeStep::SendM4{tk,gtk,gtk_idx,..}=step{
             if !(1..=3).contains(&gtk_idx)||!io.install_keys(&tk,&gtk,gtk_idx){return Err(Error::KeyInstall);}
-            return Ok(Connected{aid,sequence:seq,handshake:hs});
+            return Ok(Connected{aid,sequence:seq,handshake:hs,tk});
         }
     }
     Err(Error::Handshake)

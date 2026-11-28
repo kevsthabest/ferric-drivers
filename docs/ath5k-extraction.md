@@ -53,3 +53,7 @@ The resident probe checkpoint 44ac8d5 passed CI. The subsequent DMA, scan, WPA2 
 ## Polled transport
 
 Shared transport implements TX descriptor preparation, QCU idle check, bounded ACK polling and RX ring consumption; station address and key-cache setup follow legacy register sequences. Resident ScanAdapter implements the transport DMA copy contract. Hardware connection not yet invoked. Legacy hardware routines remain in place pending regression qualification.
+
+## Resident connection and data path
+
+Internal entry points now bind the shared connection engine and polled transport to resident DMA and station state. Explicit BSSID/channel and externally supplied fresh SNonce are required; no DOS entry exports credentials or activates hardware. TX uses software CCMP, RX uses the protected frame boundary. EAPOL currently invalidates the application session until group rekey is wired. Errors retain the DMA lease for shutdown. No claim of operational Wi-Fi or qualified randomness.

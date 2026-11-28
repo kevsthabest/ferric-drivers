@@ -9,6 +9,7 @@ use ferric_ath5k::scan::WifiScanResult;
 use ferric_ath5k::probe::{WifiProbeInfo,read_revision,probe_mapped};
 mod registers;
 mod dma_platform;
+mod session;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo)->!{loop{}}
@@ -33,10 +34,10 @@ unsafe fn ath_cb_master(_:u32,_:u32)->u32{5}
 unsafe fn ath_map(_:u32,_:u32)->u32{0}
 #[cfg(test)]
 unsafe fn ath_unmap(_:u32)->u32{0}
-struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo,scan:WifiScanResult}
+struct Resident{slot:Option<u32>,linear:u32,dma:Lease,info:WifiProbeInfo,scan:WifiScanResult,link:Option<session::Link>}
 struct Cell(UnsafeCell<Resident>);
 unsafe impl Sync for Cell{}
-static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO,scan:WifiScanResult::ZERO}));
+static STATE:Cell=Cell(UnsafeCell::new(Resident{slot:None,linear:0,dma:Lease::new(),info:WifiProbeInfo::ZERO,scan:WifiScanResult::ZERO,link:None}));
 fn state()->&'static mut Resident{unsafe{&mut *STATE.0.get()}}
 fn eligible(info:&CardBusSlotInfo)->bool{
     info.present!=0&&info.stage==5&&info.card_present!=0&&info.is_cardbus!=0&&info.powered_3v3!=0&&
@@ -76,6 +77,7 @@ pub extern "C" fn ath_probe(slot:u32)->u32{
 pub extern "C" fn ath_dma_start(seg:u32)->u32{
     let s=state();
     let Some(slot)=s.slot else{return 5;};
+    if s.link.is_some(){return 2;}
     if s.info.stage!=4||s.info.mac_ok==0||seg==0||seg>0xffff{return 1;}
     let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
     match s.dma.start(&mut io,seg<<4){Ok(_)=>0,Err(_)=>if s.dma.can_unload(){9}else{7}}
@@ -96,6 +98,49 @@ pub extern "C" fn ath_scan(seg:u32)->u32{
     if s.dma.shutdown(&mut io).is_err(){return 7;}
     if result.is_ok(){0}else{8}
 }
+/// Internal connection path. Explicit AP selection and externally supplied
+/// fresh SNonce; no DOS or Jemm service exports this entry yet.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ath_connect_internal(seg:u32,req:*mut ferric_ath5k::connection::WifiConnectReq,nonce:*const [u8;32])->u32{
+    if req.is_null()||nonce.is_null(){return 1;}
+    let r=unsafe{core::ptr::read_unaligned(req)};
+    let sn=unsafe{core::ptr::read_unaligned(nonce)};
+    if !session::valid(&r,&sn){return 1;}
+    if state().info.aes_hw==0{return 5;}
+    let status=ath_dma_start(seg);if status!=0{return status;}
+    let s=state();
+    let (Some(slot),Some(region))=(s.slot,s.dma.region())else{return 7;};
+    let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
+    let result={
+        let mut adapter=dma_platform::ScanAdapter{mmio:&mut io.mmio,region};
+        session::establish(&mut adapter,region,s.info.mac,&r,sn)
+    };
+    match result{
+        Ok(link)=>{s.link=Some(link);0}
+        Err(_)=>{
+            if s.dma.shutdown(&mut io).is_err(){7}else{8}
+        }
+    }
+}
+/// Internal Ethernet data path, still unreachable from DOS.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ath_send_internal(src:*const u8,len:u32)->u32{
+    if src.is_null()||!(14..=1514).contains(&len){return 1;}
+    let s=state();let (Some(link),Some(region))=(s.link.as_mut(),s.dma.region())else{return 5;};
+    let mut mmio=registers::Mmio(s.linear);
+    let mut io=dma_platform::ScanAdapter{mmio:&mut mmio,region};
+    if link.send(&mut io,region,unsafe{core::slice::from_raw_parts(src,len as usize)}){0}else{8}
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ath_receive_internal(dst:*mut u8,capacity:u32)->u32{
+    if dst.is_null()||capacity<1514||capacity>1600{return 0;}
+    let s=state();let (Some(link),Some(region))=(s.link.as_mut(),s.dma.region())else{return 0;};
+    let mut mmio=registers::Mmio(s.linear);
+    let mut io=dma_platform::ScanAdapter{mmio:&mut mmio,region};
+    match link.receive(&mut io,region,unsafe{core::slice::from_raw_parts_mut(dst,capacity as usize)}){
+        Ok(Some(n))=>n as u32,Ok(None)=>0,Err(_)=>{s.link=None;0}
+    }
+}
 /// Ring-0 caller provides a writable 44-byte ABI buffer. DOS wrapper bounds it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
@@ -109,6 +154,8 @@ pub unsafe extern "C" fn ath_query(dst:*mut WifiProbeInfo)->u32{
 pub extern "C" fn ath_shutdown()->u32{
     let s=state();
     let Some(slot)=s.slot else{return 0;};
+    // Disable application data before attempting shutdown, even on failure.
+    s.link=None;
     if !s.dma.can_unload(){
         let mut io=dma_platform::Platform{slot,mmio:registers::Mmio(s.linear),fail:0};
         if s.dma.shutdown(&mut io).is_err(){return 7;}
