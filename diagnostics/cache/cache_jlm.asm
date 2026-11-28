@@ -96,18 +96,17 @@ dispatch:
  ; Output 160 bytes: version, signature, features, count,
  ; MTRRCAP, DEF_TYPE, eight variable base/mask pairs.
  ; Zero all output first, no direction flag changes leak.
- pushfd
- cld
- push edi
  push eax
  push edx
  xor eax,eax
- mov ecx,40
- rep stosd
+ mov ecx,0
+.zero:
+ mov [edi+ecx],eax
+ add ecx,4
+ cmp ecx,160
+ jb .zero
  pop edx
  pop eax
- pop edi
- popfd
  mov dword [edi],0x10000
  mov [edi+4],eax
  mov [edi+8],edx
